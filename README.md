@@ -1,6 +1,6 @@
-# Wiera: Policy-Driven Multi-Tiered Geo-Distributed Cloud Storage Instances
+# Wiera: Policy-driven Multi-tiered Geo-distributed Cloud Storage Instances
 
-Wiera is a policy driven key-value storage system for geo-distributed cloud environment.
+Wiera is an open-source policy-driven key-value storage system for geo-distributed cloud environment.
 
 
 ### Goals

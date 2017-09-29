@@ -10,7 +10,7 @@ from pprint import *
 
 sys.path.append('./trips')
 
-import trips
+#import trips
 
 class Policy:	
 	def __init__(self, wiera_instance, policy_spec):
@@ -28,8 +28,8 @@ class Policy:
 		#should be from policy -> For now only server list
 		self.local_instance_manager = localInstanceManager.LocalInstanceManager(self)
 
-		if 'trips' in policy_spec:
-			self.trips = self.init_trips()
+#		if 'trips' in policy_spec:
+#			self.trips = self.init_trips()
 #		self.re_evaluate_data_placement(None)
 
 	def re_evaluate_data_placement(self, query):

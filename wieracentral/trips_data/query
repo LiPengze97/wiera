@@ -1,0 +1,85 @@
+{
+	"object_size": 102400000,
+		"access_info": {
+			"aws-us-east": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"aws-us-east-2": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"aws-us-west": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"aws-us-west-2": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"aws-ca-central": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"aws-eu-west": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"aws-eu-west-2": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"aws-eu-central": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"aws-asia-se": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"aws-asia-se-2": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"aws-asia-ne": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"aws-asia-south": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"aws-asia-ne-2": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"aws-sa-east": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"azure-us-east": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"azure-us-west": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"azure-eu-west": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"azure-eu-north": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"azure-asia-se": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			},
+			"azure-asia-ne": {
+				"get_access_cnt":1,
+				"put_access_cnt":1
+			}
+		}
+}

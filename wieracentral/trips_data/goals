@@ -1,0 +1,12 @@
+{
+  "get_sla": 100,
+  "put_sla": 200,
+  "storage_pct": 90,
+  "network_pct": 90,
+  "degree_of_fault": 2,
+  "allow_more_dcs":true,
+  "consistency": 3,
+  "objective":"cost",
+  "wiera_location": "aws-us-east",
+  "access_rule_cnt":3
+}

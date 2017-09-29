@@ -1,0 +1,2 @@
+#!/bin/bash
+java -cp ".:./target/*:./target/dependency/*" umn.dcsg.wieralocalserver.test.LocalInstanceClient

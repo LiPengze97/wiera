@@ -1,0 +1,8 @@
+<component name="ArtifactManager">
+  <artifact type="jar" name="wiera">
+    <output-path>$PROJECT_DIR$/out/artifacts/wiera</output-path>
+    <root id="archive" name="wiera.jar">
+      <element id="module-output" name="wieralocalserver" />
+    </root>
+  </artifact>
+</component>

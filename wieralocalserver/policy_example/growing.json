@@ -1,0 +1,86 @@
+{
+  "id": "growing",
+  "host_list": {
+    "aws-us-east": {
+      "storage_tiers": [
+        {
+          "tier_name": "redis",
+          "tier_size": "1KB",
+          "tier_type": 0,
+          "tier_location": "localhost",
+          "tier_expected_latency": 10,
+          "default": true
+        },
+        {
+          "tier_name": "ebs",
+          "tier_size": "2KB",
+          "tier_type": 2,
+          "tier_location": "ebs-location",
+          "tier_expected_latency": 10,
+          "default": false
+        }
+      ],
+      "events": [
+        {
+          "event_type": "ActionPut",
+          "event_trigger": [
+            "ActionPut"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "Store",
+              "response_parameters": {
+                "to": ":redis"
+              }
+            }
+          ]
+        },
+        {
+          "event_type": "MonitoringTierCapacity",
+          "event_trigger": [
+            "ActionPut"
+          ],
+          "event_conditions": {
+            "tier_name": "redis",
+            "capacity_threshold": 10
+          },
+          "responses": [
+            {
+              "response_type": "Grow",
+              "response_parameters": {
+                "tier_name": "redis",
+                "percent": 50
+              }
+            }
+          ]
+        },
+        {
+          "event_type": "Timer",
+          "event_trigger": [
+            ""
+          ],
+          "event_conditions": {
+            "period": 3000
+          },
+          "responses": [
+            {
+              "response_type": "SearchKeys",
+              "response_parameters": {
+                "from": ":redis",
+                "query_type": "all"
+              }
+            },
+            {
+              "response_type": "Move",
+              "response_parameters": {
+                "from": ":redis",
+                "to": ":ebs"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

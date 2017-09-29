@@ -1,0 +1,94 @@
+{
+  "id": "DynamicConsistency",
+  "host_list": {
+    "aws-us-east": {
+      "storage_tiers": [
+        {
+          "tier_name": "ebs",
+          "tier_size": "5GB",
+          "tier_type": 2,
+          "tier_location": "ebs-location",
+          "tier_expected_latency": 10,
+          "default": true
+        }
+      ],
+      "events": [
+        {
+          "event_type": "ActionPut",
+          "event_trigger": [
+            "ActionPut"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "consistency.EventualConsistency",
+              "response_parameters": {
+                "to": ["all"]
+              }
+            }
+          ]
+        },
+        {
+          "event_type": "ActionGet",
+          "event_trigger": [
+            "ActionGet"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "consistency.EventualConsistency",
+              "response_parameters": {
+                "to": ["all"]
+              }
+            }
+          ]
+        }
+       
+      ]
+    },
+    "aws-us-east-2": {
+      "storage_tiers": [
+        {
+          "tier_name": "ebs",
+          "tier_size": "5GB",
+          "tier_type": 2,
+          "tier_location": "ebs-location",
+          "tier_expected_latency": 10,
+          "default": true
+        }
+      ],
+      "events": [
+        {
+          "event_type": "ActionPut",
+          "event_trigger": [
+            "ActionPut"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "consistency.EventualConsistency",
+              "response_parameters": {
+                "to": ["all"]
+              }
+            }
+          ]
+        },
+		{
+			"event_type":"ActionGet",
+			"event_trigger":["ActionGet"],
+			"event_conditions":{},
+			"responses":[
+				{
+					"response_type":"consistency.EventualConsistency",
+					"response_parameters":{
+						"to":["all"]
+					}
+				}
+			]
+		}
+        
+       
+      ]
+    }
+  }
+}

@@ -1,0 +1,2 @@
+#!/bin/bash
+java -Xmx768m -cp ".:./target/*:./target/dependency/*" umn.dcsg.wieralocalserver.LocalServer $1 $2

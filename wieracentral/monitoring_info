@@ -1,0 +1,1 @@
+{"aws-us-east": {"network_latency": {"aws-us-east": 0, "aws-us-east-2": 27.473245123543787}, "storage_latency": {"ebs": {"put_latency": 0.746965, "get_latency": 1.000549}}}, "aws-us-east-2": {"network_latency": {"aws-us-east": 41.1146886643686, "aws-us-east-2": 0}, "storage_latency": {"ebs": {"put_latency": 0.575201, "get_latency": 1.69085}}}}

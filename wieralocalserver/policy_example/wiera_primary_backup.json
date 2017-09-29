@@ -1,0 +1,101 @@
+{
+  "id": "primary_backup",
+  "host_list": {
+    "aws-us-east-2": {
+      "storage_tiers": [
+        {
+          "tier_name": "ebs",
+          "tier_size": "5GB",
+          "tier_type": 2,
+          "tier_location": "ebs-location",
+          "tier_expected_latency": 10,
+          "default": true,
+          "primary": true
+        }
+      ],
+      "events": [
+        {
+          "event_type": "ActionPut",
+          "event_trigger": [
+            "ActionPut"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "Store",
+              "response_parameters": {
+                "to": ":ebs"
+              }
+            },
+            {
+              "response_type": "Broadcast",
+              "response_parameters": {
+                "to": [
+                  "all"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "event_type": "ActionGet",
+          "event_trigger": [
+            "ActionGet"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "Retrieve",
+              "response_parameters": {}
+            }
+          ]
+        }
+      ]
+    },
+    "aws-us-east": {
+      "storage_tiers": [
+        {
+          "tier_name": "ebs",
+          "tier_size": "5GB",
+          "tier_type": 2,
+          "tier_location": "ebs-location",
+          "tier_expected_latency": 10,
+          "default": true,
+          "primary": false
+        }
+      ],
+      "events": [
+        {
+          "event_type": "ActionPut",
+          "event_trigger": [
+            "ActionPut"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "ForwardPut",
+              "response_parameters": {
+                "to": "aws-us-east-2:"
+              }
+            }
+          ]
+        },
+        {
+          "event_type": "ActionGet",
+          "event_trigger": [
+            "ActionGet"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "ForwardGet",
+              "response_parameters": {
+                "to": "aws-us-east-2:"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

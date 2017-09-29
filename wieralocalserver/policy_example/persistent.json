@@ -1,0 +1,98 @@
+{
+  "id": "persistency",
+  "host_list": {
+    "aws-us-east": {
+      "storage_tiers": [
+        {
+          "tier_name": "redis",
+          "tier_size": "10KB",
+          "tier_type": 0,
+          "tier_location": "localhost",
+          "default": true,
+          "tier_expected_latency": 10
+        },
+        {
+          "tier_name": "ebs",
+          "tier_size": "5B",
+          "tier_type": 2,
+          "tier_location": "ebs-location",
+          "default": false,
+          "tier_expected_latency": 10
+        },
+        {
+          "tier_name": "s3",
+          "tier_size": "10GB",
+          "tier_type": 2,
+          "tier_location": "s3-location",
+          "default": false,
+          "tier_expected_latency": 10
+        }
+      ],
+      "events": [
+        {
+          "event_type": "ActionPut",
+          "event_trigger": [
+            "ActionPut"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "Store",
+              "response_parameters": {
+                "to": ":redis"
+              }
+            },
+            {
+              "response_type": "Copy",
+              "response_parameters": {
+                "to": ":ebs",
+                "from": ":redis"
+              }
+            }
+          ]
+        },
+        {
+          "event_type": "ActionGet",
+          "event_trigger": [
+            "ActionGet"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "Retrieve",
+              "response_parameters": {}
+            }
+          ]
+        },
+        {
+          "event_type": "MonitoringTierCapacity",
+          "event_trigger": [
+            "ActionPut"
+          ],
+          "event_conditions": {
+            "tier_name": "ebs",
+            "capacity_threshold": 50
+          },
+          "responses": [
+            {
+              "response_type": "SearchKeys",
+              "response_parameters": {
+                "from": ":ebs",
+                "query_type": "all"
+              }
+            },
+            {
+              "response_type": "Copy",
+              "response_parameters": {
+                "from": ":ebs",
+                "to": ":s3"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
+
+

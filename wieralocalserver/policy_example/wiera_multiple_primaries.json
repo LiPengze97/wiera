@@ -1,0 +1,137 @@
+{
+  "id": "multiple_primaries_consistency",
+  "host_list": {
+    "aws-us-east": {
+      "storage_tiers": [
+        {
+          "tier_name": "ebs",
+          "tier_size": "5GB",
+          "tier_type": 2,
+          "tier_location": "ebs-location",
+          "tier_expected_latency": 10,
+          "default": true
+        }
+      ],
+      "events": [
+        {
+          "event_type": "ActionPut",
+          "event_trigger": [
+            "ActionPut"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "LockGlobalWrite",
+              "response_parameters": {}
+            },
+            {
+              "response_type": "Store",
+              "response_parameters": {
+                "to": ":ebs"
+              }
+            },
+            {
+              "response_type": "Broadcast",
+              "response_parameters": {
+                "to": [
+                  "all"
+                ]
+              }
+            },
+            {
+              "response_type": "UnLock",
+              "response_parameters": {}
+            }
+          ]
+        },
+        {
+          "event_type": "ActionGet",
+          "event_trigger": [
+            "ActionGet"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "LockGlobalRead",
+              "response_parameters": {}
+            },
+            {
+              "response_type": "Retrieve",
+              "response_parameters": {}
+            },
+            {
+              "response_type": "UnLock",
+              "response_parameters": {}
+            }
+          ]
+        }
+      ]
+    },
+    "aws-us-east-2": {
+      "storage_tiers": [
+        {
+          "tier_name": "ebs",
+          "tier_size": "5GB",
+          "tier_type": 2,
+          "tier_location": "ebs",
+          "tier_expected_latency": 10,
+          "default": true
+        }
+      ],
+      "events": [
+        {
+          "event_type": "ActionPut",
+          "event_trigger": [
+            "ActionPut"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "LockGlobalWrite",
+              "response_parameters": {}
+            },
+            {
+              "response_type": "Store",
+              "response_parameters": {
+                "to": ":ebs"
+              }
+            },
+            {
+              "response_type": "Broadcast",
+              "response_parameters": {
+                "to": [
+                  "all"
+                ]
+              }
+            },
+            {
+              "response_type": "UnLock",
+              "response_parameters": {}
+            }
+          ]
+        },
+        {
+          "event_type": "ActionGet",
+          "event_trigger": [
+            "ActionGet"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "LockGlobalRead",
+              "response_parameters": {}
+            },
+            {
+              "response_type": "Retrieve",
+              "response_parameters": {}
+            },
+            {
+              "response_type": "UnLock",
+              "response_parameters": {}
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

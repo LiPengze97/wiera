@@ -98,23 +98,13 @@ public class WieraClientCLI {
             nWieraPort = Integer.parseInt(cmd.getOptionValue("p"));
         }
 
-//        File policyFile = new File(strPolicyPath);
-//
-//        if (policyFile.exists() == true && policyFile.isDirectory() == false) {
-//
-//        } else {
-//            System.out.println("[log] Failed to find policy file \"" + strPolicyPath + "\"");
-//            return;
-//        }
-
         JSONArray localServerList = null;
 
         w_centralC = new WieraCentralClient(strWieraIPAddress, nWieraPort);
         if (w_centralC != null) {
 
 
-            localServerList = w_centralC.getLocalStorageServers();
-            System.out.println("[Log] Wiera Local Server" + localServerList.toString());
+           w_centralC.printLocalServers();
 
         } else {
             //Fail to connect to Wiera
@@ -130,6 +120,7 @@ public class WieraClientCLI {
         BufferedReader in = new BufferedReader(isr);
         while(true){
             try {
+                System.out.print("#");
                 if (System.in.available() >= 0) {
                     data = in.readLine();
                     tokens = data.split(delims);

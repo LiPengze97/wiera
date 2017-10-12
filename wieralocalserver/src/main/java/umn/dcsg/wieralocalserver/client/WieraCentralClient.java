@@ -8,28 +8,34 @@ import org.apache.thrift.protocol.TProtocol;
 import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
-// import org.apache.thrift.transport.TTransportException;
+
 import org.json.JSONArray;
 import org.json.JSONObject;
-import org.mortbay.util.ajax.JSON;
 import umn.dcsg.wieralocalserver.PolicyGenerator;
 
 import umn.dcsg.wieralocalserver.thriftinterfaces.ApplicationToWieraIface;
-// import umn.dcsg.wieralocalserver.utils.Utils;
+
 
 
 
 import static umn.dcsg.wieralocalserver.Constants.*;
 
 public class WieraCentralClient {
-    
+
+
     protected ApplicationToWieraIface.Client wieraCentralClient = null;
     protected String strWieraID = "";
     protected JSONArray wieraLocalInstancesList = null;
     protected JSONArray wieraLocalServersList = null;
     protected boolean setpolicy = false;
 
-
+    /**
+     * Creates a client object that is used to call the functions provided by the Wiera central server.
+     *
+     * @param strIPAddress The IP address of the Wiera central server.
+     * @param nPort The port number of the Wiera central server service.
+     *
+     * */
     public WieraCentralClient(String strIPAddress, int nPort){
         TTransport transport;
 
@@ -45,6 +51,12 @@ public class WieraCentralClient {
         }
         this.wieraCentralClient = client;
     }
+    /**
+     * Gets the registered available local storage servers' info.
+     *
+     * The format of each entry in the array is defined as ["hostname", "IP-address"].
+     * @return An array of local storage servers' info.
+     * */
 
     public JSONArray getLocalStorageServers(){
         if(wieraCentralClient != null){
@@ -68,7 +80,34 @@ public class WieraCentralClient {
             return null;
         }
     }
+    /**
+     * Prints all the available servers' info.
+     *
+     *
+     * */
+    public void printLocalServers(){
+        if(wieraLocalServersList == null){
+            getLocalStorageServers();
+        }
+        if(wieraLocalServersList != null){
+            System.out.println("------------------------  Local Server List  ------------------------");
+            int len = wieraLocalServersList.length();
+            for (int i = 0; i < len; i++) {
+                JSONArray server = (JSONArray) wieraLocalServersList.get(i);
+                System.out.format("Hostname: %s, IP: %s\n", server.get(0), server.get(1));
+            }
 
+        }else{
+            System.out.println("[debug] ");
+        }
+    }
+    /**
+     * Gets the information of the launched local storage instances from local servers.
+     *
+     * The format of each entry in the array is defined as ["hostname", "IP-address", nPort].
+     * @return An array of launched local storage instances' info; null if the policy is not setup.
+     * @see WieraCentralClient#startPolicy(String)
+     * */
     public JSONArray getLocalStorageInstances(){
         if(wieraCentralClient == null || strWieraID.equals("")){
             System.out.println("[debug] ");
@@ -95,6 +134,14 @@ public class WieraCentralClient {
             return null;
         }
     }
+    /**
+     * Gets a default local storage instances.
+     *
+     * @return An array that stores the info about the default instance; null if the policy is not setup.
+     * @see WieraCentralClient#startPolicy(String)
+     *
+     * */
+
     public JSONArray getDefaultLocalStorageInstance(){
         if(wieraLocalInstancesList != null){
             return (JSONArray) wieraLocalInstancesList.get(0);
@@ -103,6 +150,14 @@ public class WieraCentralClient {
         }
         return null;
     }
+
+    /**
+     * Gets a local storage instances according to the supplied hostname.
+     *
+     * @param hostname The desired instance's hostname.
+     * @return An array that stores the info about this instance; null if the instance is not found.
+     *
+     * */
     public JSONArray getLocalStorageInstances(String hostname) {
         if(wieraLocalInstancesList != null){
             JSONArray instance;
@@ -118,10 +173,28 @@ public class WieraCentralClient {
         return null;
 
     }
+    /**
+     * Gets a client of the local storage instance.
+     *
+     * Creates a concrete local instance's client, applications can use this client to store and retrieve data according to
+     * the set policy.
+     * @param strIPAddress The IP address of the local server that runs this storage instance.
+     * @param nPort The port number where the storage instance listens a client.
+     * @return A client of the local storage instance.
+     * @see WieraLocalInstanceClient
+     * */
+
     public WieraLocalInstanceClient getLocalInstance(String strIPAddress, int nPort){
         return new WieraLocalInstanceClient(strIPAddress, nPort);
     }
-    
+
+    /**
+     * Prints all the launched storage instance' info.
+     *
+     * Usually call before creating the local instance's client.
+     * @see WieraCentralClient#getLocalInstance(String, int)
+     *
+     * */
     public void printLocalStorageInstances(){
         if(wieraLocalInstancesList == null){
             getLocalStorageInstances();
@@ -138,7 +211,12 @@ public class WieraCentralClient {
             System.out.println("[debug] ");
         }
     }
-     
+    /**
+     * Start a <i href="">policy file</i> and launch corresponding local instances.
+     *
+     * @param strPolicyPath The location of the policy file.
+     * @return True if successful, otherwise false.
+     * */
 
     public boolean startPolicy(String strPolicyPath){
         if(wieraCentralClient != null){
@@ -178,6 +256,12 @@ public class WieraCentralClient {
             return false;
         }
     }
+    /**
+     * Start the launched policy.
+     *
+     *
+     * @return True if successful, otherwise false.
+     * */
     public boolean stopPolicy(){
         if(wieraCentralClient == null || strWieraID.equals("")){
             System.out.println("[debug] ");
@@ -208,6 +292,12 @@ public class WieraCentralClient {
         }
         return false;
     }
+
+    /**
+     * Checks whether a policy is started.
+     *
+     * @return True if already started a policy, otherwise false.
+     * */
     public boolean isSetpolicy(){
         return setpolicy;
     }

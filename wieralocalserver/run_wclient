@@ -1,3 +1,2 @@
 #!/bin/bash
-java -cp ".:./target/*:./target/dependency/*" umn.dcsg.wieralocalserver.test.WieraClient $1
- $2
+java -cp ".:./target/*:./target/dependency/*" umn.dcsg.wieralocalserver.client.WieraClientCLI $1 $2

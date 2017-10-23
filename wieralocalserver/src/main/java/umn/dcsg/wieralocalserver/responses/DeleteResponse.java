@@ -25,8 +25,8 @@ public class DeleteResponse extends Response {
 
     @Override
     public boolean respond(Map<String, Object> responseParams) {
-        boolean bRet;
-
+        boolean bRet = false;
+        /*
         String strKey = (String) responseParams.get(KEY);
         String strTierName = (String) responseParams.get(TIER_NAME);
         MetaObjectInfo obj = m_localInstance.getMetadata(strKey);
@@ -35,7 +35,7 @@ public class DeleteResponse extends Response {
             lock.writeLock().lock();
             m_localInstance.deleteInternal(obj, strTierName);
             obj.removeLocale(LocalServer.getHostName(), strTierName);
-/*          obj.removeLevel(level);
+            obj.removeLevel(level);
 
             if (obj.getLocale() == null)
             {
@@ -44,7 +44,7 @@ public class DeleteResponse extends Response {
                 // from the metadata store
 				//need to decidd how to handle deleteObject strKey
 				// m_instance.m_metadataStore.deleteObject(obj.m_key);
-            }*/
+            }
 
             //Result
             bRet = true;
@@ -55,7 +55,7 @@ public class DeleteResponse extends Response {
             lock.writeLock().unlock();
         }
 
-        responseParams.put(RESULT, bRet);
+        responseParams.put(RESULT, bRet);*/
         return bRet;
     }
 

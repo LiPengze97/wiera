@@ -15,10 +15,21 @@ import umn.dcsg.wieralocalserver.PolicyGenerator;
 
 import umn.dcsg.wieralocalserver.thriftinterfaces.ApplicationToWieraIface;
 
-
-
-
 import static umn.dcsg.wieralocalserver.Constants.*;
+
+/**
+ * WieraCentralClient is used to create, configure and manage the Wiera Local Storage instances.
+ *
+ *
+ * <p>How to use.</p>
+ * <ol>
+ *  <li><code>getLocalStorageServers</code> Checks the available local servers. And prepare your policy.</li>
+ *  <li><code>startPolicy(policyPath)</code> Launches this policy and corresponding local instances.</li>
+ *  <li><code>getLocalStorageInstances()</code> Checks these launched instances, and find their IPs and Ports.</li>
+ *  <li><code>getLocalInstance(strIPAddress, nPort)</code> Obtains a instance's client.</li>
+ *  </ol>
+ *  @see WieraLocalInstanceClient
+ * */
 
 public class WieraCentralClient {
 
@@ -30,7 +41,7 @@ public class WieraCentralClient {
     protected boolean setpolicy = false;
 
     /**
-     * Creates a client object that is used to call the functions provided by the Wiera central server.
+     * Creates a client object that is used to create, configure and manage the Wiera Local Storage instances.
      *
      * @param strIPAddress The IP address of the Wiera central server.
      * @param nPort The port number of the Wiera central server service.

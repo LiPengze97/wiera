@@ -32,7 +32,7 @@ public class MoveResponse extends Response {
 	@Override
 	public boolean respond(Map<String, Object> responseParams) {
 		boolean bRet = true;
-
+		/*
 		//Locale (from) : MetaObject : versions
 		HashMap<Locale, Map<MetaObjectInfo, Vector<Integer>>> keyList = (HashMap<Locale, Map<MetaObjectInfo, Vector<Integer>>>) responseParams.get(KEY_LIST);
 		Locale fromLocale = m_localInstance.getLocaleWithID((String) responseParams.get(FROM));
@@ -149,7 +149,7 @@ public class MoveResponse extends Response {
 		}
 
 		//Put the reason
-		responseParams.put(REASON, strReason);
+		responseParams.put(REASON, strReason);*/
 		return bRet;
 	}
 

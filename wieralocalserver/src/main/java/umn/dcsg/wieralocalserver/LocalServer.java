@@ -123,8 +123,10 @@ public class LocalServer {
 		localServerInfo.put(LOCAL_SERVER_PORT, getLocalServerPort());
 		localServerInfo.put(HOSTNAME, getHostName());
 		try {
+
 			m_wieraClient.registerLocalServer(localServerInfo.toString());
 		} catch (TException e) {
+			System.out.println(localServerInfo.toString());
 			e.printStackTrace();
 		}
 	}
@@ -159,6 +161,8 @@ public class LocalServer {
 	}
 
 	public static String getExternalIP() {
+		// Nan : hard code for testing
+		m_strExternalIP="127.0.0.1";
 		if (m_strExternalIP == null) {
 			try {
 				URL url = new URL("http://checkip.amazonaws.com");
@@ -222,7 +226,7 @@ public class LocalServer {
 		//Get WieraID First
     	String strWieraID = policy.getString(ID);
     	int nInstanceCnt = policy.getInt(INSTANCE_CNT);
-
+		//nInstanceCnt
         if (strWieraID == null || strWieraID.length() == 0) {
 			response.put(RESULT, false);
 			response.put(VALUE, "Failed to getObject policy id from policy"); //Maybe LocalInstance info?

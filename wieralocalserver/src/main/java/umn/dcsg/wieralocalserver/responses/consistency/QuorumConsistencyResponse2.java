@@ -17,23 +17,15 @@ import static umn.dcsg.wieralocalserver.MetaObjectInfo.NO_SUCH_VERSION;
  * Created by Kwangsung on 11/28/2016.
  * This is an example for strong consistency using Quorum.
  */
-public class QuorumConsistencyResponse extends Response {
-    protected int m_nWriteQuorum = -1;
-    protected int m_nReadQuorum = -1;
+public class QuorumConsistencyResponse2 extends Response {
+    protected int m_nWriteQuorum;
+    protected int m_nReadQuorum;
 
-    public QuorumConsistencyResponse(LocalInstance instance, String strEventName, Map<String, Object> params) {
+    public QuorumConsistencyResponse2(LocalInstance instance, String strEventName, Map<String, Object> params) {
         super(instance, strEventName, params);
         m_strRelatedEventType = strEventName;
-        if(m_initParams.containsKey(READ_QUORUM) == true) {
-            m_nReadQuorum = (int) m_initParams.get(READ_QUORUM);
-        }
-        if(m_initParams.containsKey(WRITE_QUORUM) == true){
-            m_nWriteQuorum = (int) m_initParams.get(WRITE_QUORUM);
-        }
-        if(m_nWriteQuorum < 0 && m_nReadQuorum < 0){
-            System.out.println("[Error] Neither write nor read quorum is correct.");
-            System.exit(1);
-        }
+        m_nReadQuorum = (int) m_initParams.get(READ_QUORUM);
+        m_nWriteQuorum = (int) m_initParams.get(WRITE_QUORUM);
     }
 
     @Override
@@ -41,13 +33,13 @@ public class QuorumConsistencyResponse extends Response {
         m_lstRequiredParams.add(KEY);
 
         //Only for PUT operation
-        if (m_initParams.containsKey(WRITE_QUORUM) == true) {
-            //m_lstRequiredParams.add(TARGET_LOCALES);
+        if (m_strRelatedEventType.equals(ACTION_PUT_EVENT) == true) {
+            m_lstRequiredParams.add(TARGET_LOCALES);
             m_lstRequiredParams.add(VALUE);
             m_lstRequiredParams.add(VERSION);
-            //m_lstRequiredParams.add(TIER_NAME);
-            //m_lstRequiredParams.add(TAG);
-            //m_lstRequiredParams.add(ONLY_META_INFO);
+            m_lstRequiredParams.add(TIER_NAME);
+            m_lstRequiredParams.add(TAG);
+            m_lstRequiredParams.add(ONLY_META_INFO);
         }
     }
 

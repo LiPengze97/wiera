@@ -11,7 +11,7 @@ import static umn.dcsg.wieralocalserver.Constants.*;
 /**
  * Created by ajay on 7/13/13.
  */
-public class CopyResponse extends Response {
+public class  CopyResponse extends Response {
     public CopyResponse(LocalInstance instance, String strEventName, Map<String, Object> params) {
         super(instance, strEventName, params);
     }
@@ -46,7 +46,7 @@ public class CopyResponse extends Response {
     @Override
     public boolean respond(Map<String, Object> responseParams) {
         boolean bRet = true;
-
+/*
         //Locale (from) : Key : versions
         HashMap<Locale, Map<MetaObjectInfo, Vector<Integer>>> keyList = (HashMap<Locale, Map<MetaObjectInfo, Vector<Integer>>>) responseParams.get(KEY_LIST);
         Locale fromLocale = m_localInstance.getLocaleWithID((String) responseParams.get(FROM));
@@ -66,10 +66,7 @@ public class CopyResponse extends Response {
 
         //Locale now override equals()
         if(keyList.containsKey(fromLocale) == true && keyList.get(fromLocale).size() > 0) {
-            System.out.printf("[debug] Found keys: %d. now copy\n", keyList.get(fromLocale).size());
-
             Map<MetaObjectInfo, Vector<Integer>> keys = keyList.get(fromLocale);
-
             for (Map.Entry<MetaObjectInfo, Vector<Integer>> entry : keys.entrySet()) {
                 rateLimiter.acquire();
 
@@ -102,7 +99,7 @@ public class CopyResponse extends Response {
 
                         //Check from locale
                         if(fromLocale.isLocalLocale() == true) {
-                            value = m_localInstance.getInternal(strVersionedKey, fromLocale.getTierName());
+                            value = m_localInstance.get(strVersionedKey, fromLocale.getTierName());
                         } else {
                             //forward get operation if not local locale
                             bRet = Response.respondAtRuntimeWithClass(m_localInstance, ForwardGetResponse.class, responseParams);
@@ -150,7 +147,8 @@ public class CopyResponse extends Response {
 
         //Put the reason
         responseParams.put(REASON, strReason);
-
+    */
         return bRet;
     }
+
 }

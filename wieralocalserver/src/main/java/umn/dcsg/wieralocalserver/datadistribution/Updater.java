@@ -11,6 +11,8 @@ import umn.dcsg.wieralocalserver.thriftinterfaces.LocalInstanceToPeerIface.Clien
 
 /**
  * Created by Kwangsung on 7/23/2017.
+ *
+ * Nan: send data to a peer in background
  */
 public class Updater implements Runnable {
     String m_strTargetHostName;

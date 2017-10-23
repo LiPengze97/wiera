@@ -20,29 +20,33 @@ public class MetaVerInfo {
     long m_lLastModifiedTime = 0;
     long m_lSize = 0;
     boolean m_bDirty = false;
-    boolean m_bPin = false;
+
+    // Nan : add, but not useful
+    String m_hostname = "";
+
 
     //String: HostName:TierName -> Only for hash value for eash searching
     //Locale: all information about Locale
     Map<String, Locale> m_storedTiers;
 
-    MetaVerInfo() {
-        this(0, LocalServer.getHostName(), "", TierInfo.TIER_TYPE.UNKNOWN, System.currentTimeMillis(), 0);
+    MetaVerInfo(){
+
     }
 
     String getLocaleID(String strHostName, String strTierName) {
         return strHostName + ':' + strTierName;
     }
 
-    MetaVerInfo(long ver, String strHostName, String strTierName, TierInfo.TIER_TYPE tierType, long startTime, long size) {
+    public MetaVerInfo(long ver, String strHostName, long startTime, long size) {
         m_lVer = ver;
         m_lAccessCnt = 0;
         m_lStartTime = startTime;
         m_lLastAccessTime = startTime;
         m_lLastModifiedTime = startTime;
         m_lSize = size;
-
+        m_hostname = strHostName;
         m_storedTiers = new HashMap<>();
+
     }
 
     void setLastModifedTime(long lastmodifiedTime) {
@@ -77,7 +81,7 @@ public class MetaVerInfo {
 
         return false;
     }
-
+    // Nan
     synchronized boolean removeLocale(String strHostName, String strTierName) {
         String strLocaleID = getLocaleID(strHostName, strTierName);
         try {
@@ -95,15 +99,7 @@ public class MetaVerInfo {
     }
 
     public boolean hasLocale(String strHostName, String strTierName) {
-/*
-        System.out.println("[debug] check if exist : " + strHostName + ":" + strTierName);
-        System.out.println("[debug] -------Available Tiers------");
-
-        for (String strTier: m_storedTiers.keySet()){
-            System.out.println("- " + strTier);
-        }
-*/
-        return m_storedTiers.containsKey(getLocaleID(strHostName, strTierName));
+         return m_storedTiers.containsKey(getLocaleID(strHostName, strTierName));
     }
 
     public Locale getLocale(String strHostName, String strTierName){
@@ -114,13 +110,14 @@ public class MetaVerInfo {
         return null;
     }
 
-    TierInfo.TIER_TYPE getTierType(String strHostName, String strTierName) {
+    public TierInfo.TIER_TYPE getTierType(String strHostName, String strTierName) {
         if (hasLocale(strHostName, strTierName) == true) {
             return m_storedTiers.get(getLocaleID(strHostName, strTierName)).getTierType();
         }
 
         return null;
     }
+
 
     //Get Local Fastest one.
     public Locale getFastestLocale(boolean bOnlyLocal) {
@@ -163,4 +160,5 @@ public class MetaVerInfo {
     public Map<String, Locale> getLocaleList() {
         return m_storedTiers;
     }
+
 }

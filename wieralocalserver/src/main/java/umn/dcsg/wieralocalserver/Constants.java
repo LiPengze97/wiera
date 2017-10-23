@@ -11,6 +11,8 @@ public class Constants {
     public static final int WIERA_PORT_FOR_LOCAL_SERVER = 55559;
     public static final int WIERA_PORT_FOR_APPLICATIONS = 55558;
 
+    public static final String KEY_TRANSLATE_FORMAT = "%s_ver_%d";
+
     public static final String MSGSTART = "[";
     public static final String MSGEND = "]";
     public static final String MSGPAIRSEPARATOR = ":";

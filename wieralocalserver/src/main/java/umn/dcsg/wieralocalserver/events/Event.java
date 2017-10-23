@@ -173,7 +173,7 @@ public abstract class Event implements Serializable {
                 Map<String, MetaObjectInfo> objsList = (Map) responseParams.get(OBJS_LIST);
 
                 for (MetaObjectInfo obj : objsList.values()) {
-                    m_localInstance.commitMeta(obj);
+                    m_localInstance.commitMetadata(obj);
                 }
             }
         } catch (Exception e) {

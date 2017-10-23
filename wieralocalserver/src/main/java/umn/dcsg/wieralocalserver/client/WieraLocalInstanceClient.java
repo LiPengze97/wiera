@@ -9,23 +9,28 @@ import org.apache.thrift.transport.TFramedTransport;
 import org.apache.thrift.transport.TSocket;
 import org.apache.thrift.transport.TTransport;
 import org.apache.thrift.transport.TTransportException;
-import org.json.JSONArray;
-import org.json.JSONObject;
-import umn.dcsg.wieralocalserver.*;
-import umn.dcsg.wieralocalserver.responses.SplitDataResponse;
-import umn.dcsg.wieralocalserver.thriftinterfaces.ApplicationToLocalInstanceIface;
-import umn.dcsg.wieralocalserver.thriftinterfaces.ApplicationToWieraIface;
-import umn.dcsg.wieralocalserver.utils.Utils;
 
-import java.io.*;
+import umn.dcsg.wieralocalserver.thriftinterfaces.ApplicationToLocalInstanceIface;
+
 import java.nio.ByteBuffer;
 
 
-import static umn.dcsg.wieralocalserver.Constants.*;
+/**
+ * WieraLocalInstanceClient is used to store and retrieve the data in a storage instances.
+ *
+ * <p>User can directly create the object, or obtain an object by the WieraCentralClient.</p>
+ * @see WieraCentralClient#getLocalInstance(String, int)
+ * */
 
 public class WieraLocalInstanceClient {
     protected ApplicationToLocalInstanceIface.Client wieraLocalInstanceClient = null;
-
+    /**
+     * Creates a client object used to manipulate data.
+     *
+     * @param strIPAddress The IP address of the Wiera central server.
+     * @param nPort The port number of the Wiera central server service.
+     *
+     * */
     public WieraLocalInstanceClient(String strIPAddress, int nPort){
         TTransport transport;
 
@@ -44,6 +49,13 @@ public class WieraLocalInstanceClient {
     
     
     }
+    /**
+     * Store this key-value pair to this instance.
+     *
+     * @param key The key associated with the data. Also used to retrieve the data.
+     * @param value The content of the data.
+     * @return True if success, otherwise false
+     * */
     public boolean set(String key, ByteBuffer value){
         boolean bRet = false;
         if(wieraLocalInstanceClient == null){
@@ -58,7 +70,11 @@ public class WieraLocalInstanceClient {
         }
         return bRet;
     }
-
+    /**
+     * Retrieve the data by its key.
+     * @param key The key associated with the data.
+     * @return The content of data, null if fails.
+     * */
     public ByteBuffer get(String key){
         if(wieraLocalInstanceClient == null){
             return null;

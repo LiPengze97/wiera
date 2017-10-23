@@ -84,7 +84,7 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
             m_localInstance.m_localInfo.incrementalForwardedRequestCnt(strFrom, PUT);
 
             MetaObjectInfo meta = m_localInstance.getMetadata(strKey);
-            nVer = meta.getLastestVersion();
+            nVer = meta.getLatestVersion();
             lLastModifiedTime = meta.getLastModifiedTime();
 
             strReason = OK;
@@ -108,6 +108,9 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
         return response.toString();
     }
 
+    //Nan: call by peer, forwardGET
+    //input KEY:FROM:[VERSION:TIER_NAME]
+    //output RESULT:REASON:TYPE:VALUE
     @Override
     public String get(String strReq) throws TException {
         //This is forwarded get operation from other peers
@@ -115,12 +118,11 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
 
         try {
             JSONObject obj = new JSONObject(strReq);
-            int nVer = MetaObjectInfo.LATEST_VERSION;
+
             String strKey = (String) obj.get(KEY);
             String strFrom = (String) obj.get(FROM);
             String strTierName = m_localInstance.m_strDefaultTierName;
-
-            //check if version is specified
+            int nVer = m_localInstance.getLatestVersion(strKey);
             if (obj.has(VERSION) == true) {
                 nVer = (int) obj.get(VERSION);
             }
@@ -128,45 +130,40 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
             if (obj.has(TIER_NAME) == true) {
                 strTierName = (String) obj.get(TIER_NAME);
             }
-            //Handling when peer instance does not know about the tiername in this instance.
-            //Find and use the fastest storage tier in this instance
+
             MetaObjectInfo meta = m_localInstance.getMetadata(strKey);
+            if(meta != null){
+                if(meta.hasLocale(strTierName)){
 
-            if (meta != null) {
-                //Found as requested
-                //I don't think this will be true for now as forwared request does not need to know the non-local storage tiername
-                //This may happen in TripS mode in which not all instances have replicas
-                Locale targetLocale = meta.getLocale(true);
-
-                if (strTierName.equals(targetLocale.getTierName()) != true) {
-                    System.out.println("[debug] Retrieving the object requested from different Tier: " + targetLocale.getTierName());
-                    strTierName = targetLocale.getTierName();
+                }else if(meta.hasLocale( m_localInstance.m_strDefaultTierName)){
+                    strTierName = m_localInstance.m_strDefaultTierName;
+                }else{
+                    strTierName = meta.getFastTier(nVer);
                 }
-            }
+                if(strTierName != null){
+                    byte[] bytes = m_localInstance.get(strKey, nVer, strTierName);
+                    //Increase forwarded get operation
+                    m_localInstance.m_localInfo.incrementalForwardedRequestCnt(strFrom, GET);
+                    if (bytes != null) {
+                        response.put(RESULT, true);
+                        response.put(VALUE, Base64.encodeBase64String(bytes));
 
-            //bUpdateMeta is true as the object is accessed by peer
-            byte[] bytes = m_localInstance.get(strKey, nVer, strTierName, true);
-
-            //Increase forwarded get operation
-            m_localInstance.m_localInfo.incrementalForwardedRequestCnt(strFrom, GET);
-
-            if (bytes == null) {
+                    }
+                }
+            }else{
                 response.put(RESULT, false);
                 response.put(REASON, "Failed to find a value associated with the key");
-            } else {
-                response.put(RESULT, true);
-                response.put(VALUE, Base64.encodeBase64String(bytes));
             }
         } catch (Exception e) {
             e.printStackTrace();
             response.put(RESULT, false);
             response.put(REASON, e.getMessage());
         }
-
         response.put(TYPE, GET);
         return response.toString();
     }
-
+    // Nan
+    // output RESULT:REASON:TYPE:VALUE
     @Override
     public String getLatestVersion(String strKey) throws TException {
         String strReason = NOT_HANDLED;
@@ -190,85 +187,51 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
 
         return response.toString();
     }
-
+    //Nan:
+    //input KEY:VALUE:[TAG:VERSION:TIER_NAME:CONFLICT_CHECK]
+    //output TYPE:RESULT:VALUE:REASON
     @Override //This function is only used for update broadcasting
     public String put(String strReq) {
         JSONObject req = new JSONObject(strReq);
         String strReason = NOT_HANDLED;
         boolean bRet;
-
+        String strTag = "";
+        int nVer = 0;
+        String strTiername = "";
+        boolean bConflictCheck = false;
         String strKey = (String) req.get(KEY);
         byte[] value = Base64.decodeBase64((String) req.get(VALUE));
-        String strTag = (String) req.get(TAG);
-        MetaObjectInfo meta = m_localInstance.getMetadata(strKey);
-
-        String strTierName;
-        if(req.has(TIER_NAME) == true && m_localInstance.isLocalStorageTier(req.getString(TIER_NAME)) == true) {
-            strTierName = (String) req.get(TIER_NAME);
-        } else {
-            strTierName = m_localInstance.m_strDefaultTierName;
+        MetaObjectInfo obj = m_localInstance.getMetadata(strKey);
+        if(req.has(TAG) == true) {
+            strTag = (String) req.get(TAG);
         }
-
-        //System.out.println("[debug] I will write to :" + strTierName);
-
-        boolean bConflictCheck = false;
+        if(req.has(VERSION) == true) {
+            nVer = (int) req.get(VERSION);
+        }else if(obj != null){
+            nVer = obj.getLatestVersion() + 1;
+        }
+        if(req.has(TIER_NAME) == true) {
+            strTiername = (String) req.get(TIER_NAME);
+        }else{
+            strTiername = m_localInstance.m_strDefaultTierName;
+        }
         if(req.has(CONFLICT_CHECK) == true) {
             bConflictCheck = (boolean) req.get(CONFLICT_CHECK);
         }
-
         //Just Write to local without checking version conflict
-        if (bConflictCheck == false || meta == null) {
-            //Create new version
-            if (m_localInstance.put(strKey, value, strTierName, strTag, true) != null) {
-                //System.out.println("new key inserted.");
+        if (bConflictCheck == false ||obj == null || obj.getLatestVersion() != nVer) {
+            if (m_localInstance.put(strKey, nVer, value, strTiername) != null) {
                 strReason = OK;
                 bRet = true;
             } else {
                 strReason = "Failed to create a new key: " + strKey;
                 bRet = false;
             }
-        } else {
-            int nRemoteVer = (int) req.get(VERSION);
-            int nLocalVer = meta.getLastestVersion();
-            long remoteModifiedTime = Utils.convertToLong(req.get(LAST_MODIFIED_TIME));
+        }else {
 
-            //Conflict same version.
-            if (nLocalVer == nRemoteVer) {
-                long localModifiedTime = meta.getLastModifiedTime();
-
-                //Now simply check the time.
-                if (remoteModifiedTime > localModifiedTime) {
-                    bRet = true;
-                    strReason = "There was a conflicts (same version is available) but updated based on modified time";
-                } else {
-                    bRet = false;
-                    strReason = "There was a conflicts (same version is available). Update was not done";
-                }
-            } else if (nLocalVer > nRemoteVer) {
-                bRet = false;
-                strReason = "Newer version is available on the instance";
-            } else {
-                bRet = true;
-                strReason = OK;
-            }
-
-            if (bRet == true) {
-                meta = m_localInstance.updateVersion(strKey, nRemoteVer, value, strTierName, strTag, remoteModifiedTime, true);
-
-                if (meta == null) {
-                    strReason += "- Failed to update the value";
-                } else    //Local copy successfully updated
-                {
-                    //Change to original to avoid anything bad
-                    meta.setLastModifiedTime(remoteModifiedTime);
-                }
-            }
+            bRet = false;
+            strReason = "There was a conflicts (same version is available). Update was not done";
         }
-
-        if (bRet == false) {
-            System.out.println("[debug] Failed In putfrompeerinstance: reason: " + strReason);
-        }
-
         //Result
         JSONObject response = new JSONObject();
         response.put(TYPE, PUT);
@@ -280,8 +243,7 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
 
     @Override
     public String getClusterLock(String strLockReq) throws TException {
-        //this function mainly will be used for distributing meta data if strong dataDistribution is required.
-        //Extract req
+
         JSONObject lockReq = new JSONObject(strLockReq);
         String strKey = (String) lockReq.get(KEY);
         boolean bWrite = (boolean) lockReq.get(IS_WRITE);
@@ -291,36 +253,7 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
         //DataDistributionUtil dataDistribution = m_localInstance.m_peerInstanceManager.getDataDistribution();
         String strResponse = "";
 
-		/*if(dataDistribution.getDistributionType() == DataDistributionUtil.DATA_DISTRIBUTION_TYPE.WIERA_CLUSTER)
-		{
-			if(((WieraCluster)dataDistribution).checkLeader() == false)
-			{
-				strResponse = "I'm not the leader for the cluster:" + dataDistribution.getPolicyID();
-				response.put(RESULT, false);
-			}
-			else
-			{
-				ReentrantReadWriteLock lock = dataDistribution.m_broadcastKeyLocker.getLock(strKey);
 
-				if(bWrite == true)
-				{
-					lock.writeLock().lock();
-					strResponse = "Write lock for key: " + strKey + " acquired";
-					response.put(RESULT, true);
-				}
-				else
-				{
-					lock.readLock().lock();
-					strResponse = "Read lock for key: " + strKey + " acquired";
-					response.put(RESULT, true);
-				}
-			}
-		}
-		else
-		{
-			strResponse = "Cluster lock is only available in Cluster mode.";
-			response.put(RESULT, false);
-		}*/
 
         response.put(VALUE, strResponse);
         System.out.println(strResponse);
@@ -337,47 +270,7 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
 
         JSONObject response = new JSONObject();
         String strResponse = NOT_HANDLED;
-		/*DataDistributionUtil dataDistribution = m_localInstance.m_peerInstanceManager.getDataDistribution();
 
-
-		if(dataDistribution.getDistributionType() == DataDistributionUtil.DATA_DISTRIBUTION_TYPE.WIERA_CLUSTER)
-		{
-			if(((WieraCluster)dataDistribution).checkLeader() == false)
-			{
-				strResponse = "I'm not the leader for the cluster:" + dataDistribution.getPolicyID();
-				response.put(RESULT, false);
-			}
-			else
-			{
-				ReentrantReadWriteLock lock = dataDistribution.m_broadcastKeyLocker.getLock(strKey);
-
-				if(bWrite == true)
-				{
-					if(lock.isWriteLocked() == true)
-					{
-						lock.writeLock().unlock();
-						strResponse = "Lock for key: " + strKey + " released";
-						response.put(RESULT, true);
-					}
-					else
-					{
-						strResponse = "There is no write lock for the key: " + strKey;
-						response.put(RESULT, false);
-					}
-				}
-				else
-				{
-					lock.readLock().unlock();
-					strResponse = "Lock for key: " + strKey + " released";
-					response.put(RESULT, true);
-				}
-			}
-		}
-		else
-		{
-			strResponse = "Peer Local lock is only available in Cluster mode.";
-			response.put(RESULT, false);
-		}*/
 
         response.put(VALUE, strResponse);
         System.out.println(strResponse);
@@ -392,23 +285,11 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
         boolean bRet = false;
 
         try {
-            //This function will be called by current leader which will resign soon
-            //but let's assume that their will be no chance for now.
+
             JSONObject obj = new JSONObject(strLeaderHostNameReq);
             String strLeaderHostName = (String) obj.get(LEADER_HOSTNAME);
 
-			/*DataDistributionUtil dataDistribution = m_localInstance.m_peerInstanceManager.getDataDistribution();
 
-			if(dataDistribution.getDistributionType() == DataDistributionUtil.DATA_DISTRIBUTION_TYPE.WIERA_CLUSTER)
-			{
-				((WieraCluster)dataDistribution).setLeaderName(strLeaderHostName);
-				strResponse = "Leader name has been changed";
-				bRet = true;
-			}
-			else
-			{
-				strResponse = "Peer Local lock is only available in Cluster mode.";
-			}*/
         } catch (Exception e) {
             e.printStackTrace();
         }

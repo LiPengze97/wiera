@@ -76,7 +76,7 @@ public class LazyUpdateManager {
     private void lazyUpdate() {
         long lastModifiedTime = 0;
         Map<String, Object> responseParams;
-        while (true) {
+       /* while (true) {
             try {
                 responseParams = m_queue.take();
 
@@ -134,7 +134,7 @@ public class LazyUpdateManager {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-        }
+        }*/
     }
 
     public boolean putToQueue(List<Locale> targetList, Map<String, Object> params) {//String strKey, int nVer, byte[] value, String strTierName, String strTag, OperationLatency operationLatency) {
@@ -143,12 +143,10 @@ public class LazyUpdateManager {
             synchronized (m_moreItem) {
                 m_moreItem.notify();
             }
-
             return true;
         } catch (Exception e) {
             e.printStackTrace();
         }
-
         return false;
     }
 }

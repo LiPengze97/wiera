@@ -22,7 +22,7 @@ class LaunchLocalInstance implements Runnable {
 	@Override
 	public void run() {
 		try {
-			//LocalInstance localInstance = new LocalInstance(filename);
+
 			m_localInstance = new LocalInstance("config.txt", m_policy, m_bStandAlone);
 			m_localInstance.runForever(m_policy);
 		} catch (NoSuchFieldException e) {

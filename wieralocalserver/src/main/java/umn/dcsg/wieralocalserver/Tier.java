@@ -92,9 +92,6 @@ public class Tier {
             if (!m_tierInterfaces.add(redisInterface)) {
                 bRet = false;
             }
-		/*	strServerList += ":11211";
-			mcInterface = new MemcachedInterface(strServerList);
-			m_tierInterfaces.add(mcInterface);*/
         }
 
         return bRet;

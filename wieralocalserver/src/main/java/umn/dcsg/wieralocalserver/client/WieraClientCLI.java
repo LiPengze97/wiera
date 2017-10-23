@@ -98,6 +98,15 @@ public class WieraClientCLI {
             nWieraPort = Integer.parseInt(cmd.getOptionValue("p"));
         }
 
+//        File policyFile = new File(strPolicyPath);
+//
+//        if (policyFile.exists() == true && policyFile.isDirectory() == false) {
+//
+//        } else {
+//            System.out.println("[log] Failed to find policy file \"" + strPolicyPath + "\"");
+//            return;
+//        }
+
         JSONArray localServerList = null;
 
         w_centralC = new WieraCentralClient(strWieraIPAddress, nWieraPort);

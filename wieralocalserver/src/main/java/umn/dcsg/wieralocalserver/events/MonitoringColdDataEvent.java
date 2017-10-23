@@ -25,6 +25,7 @@ public class MonitoringColdDataEvent extends MonitoringEvent {
 
     @Override
     Map<String, Object> doCheckMonitoringEventCondition(Map<String, Object> eventParams, String strTriggerName) {
+        /*
         Locale targetLocale = m_localInstance.getLocaleWithID((String) eventParams.get(TARGET_LOCALE));
 
         Map<MetaObjectInfo, Vector<Integer>> keys = m_instance.m_metadataStore.searchColdObject(m_lColdDataThreshold,
@@ -41,7 +42,7 @@ public class MonitoringColdDataEvent extends MonitoringEvent {
             eventParams.put(KEY_LIST, keyList);
             return eventParams;
         }
-
+*/
         return null;
     }
 }

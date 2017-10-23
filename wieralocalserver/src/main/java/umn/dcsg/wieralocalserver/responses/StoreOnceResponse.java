@@ -22,12 +22,13 @@ public class StoreOnceResponse extends StoreResponse {
 
     @Override
     public boolean respond(Map<String, Object> responseParams) {
+
         String strKey = (String) responseParams.get(KEY);
         byte[] value = (byte[]) responseParams.get(VALUE);
         Locale locale = (Locale) responseParams.get(TARGET_LOCALE);
         String strReason;
         boolean bRet = false;
-
+        /*
         try {
             MetaObjectInfo obj = null;
             MessageDigest md = MessageDigest.getInstance("MD5");
@@ -55,7 +56,7 @@ public class StoreOnceResponse extends StoreResponse {
         responseParams.put(RESULT, bRet);
         if (bRet == false) {
             responseParams.put(REASON, strReason);
-        }
+        }*/
 
         return bRet;
     }

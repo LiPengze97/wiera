@@ -39,24 +39,69 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.json.*;
 
+/**
+ * LocalInstance's duties
+ *      1. Manage metadata
+ *      2. Provide services for wiera central, client, peers, and also have peer-client
+ *      3. Manage Event and response
+ *      4. Storage Tiers
+ *
+ *
+ * */
 
 public class LocalInstance {
-    public MetadataStore m_metadataStore = null;
+
+    // Utility variables
     public KeyLocker m_keyLocker = null;
+    public Metrics m_localInfo = null;
+    final private int defaultWorkerCount = 1;
+    private int workerCount = defaultWorkerCount;
+    //Nan : the following two are not used.
+    //final private int defaultEDTCount = 1;
+    //private int edtCount = defaultEDTCount;
+    private boolean m_bVersioningSupport = false;
+    private String m_strDefaultConfig = "config.txt";
+
+    /*AES (128)
+    DES (56)
+    DESede (168)
+    HmacSHA1
+    HmacSHA256*/
+    public String encryptionAlgorithm = "AES";
+    public Key encryptionKey = null;
+
+    // We will start listening for client putObject/getObject on this port
+    final private int defaultPort = 55555;
+    private int m_nServerPortForApplication = defaultPort;
+    private int m_nServerPortForWiera = 0;
+    public String m_strManagerIP;
+    public int m_nManagerPort = 0;
+    protected String m_strPolicyID;
+    protected boolean m_bStandAloneMode;
+
+    // Metadata
+    public MetadataStore m_metadataStore = null;
+
+
+    // Communication variables
     public TServer m_applicationServer = null;
     public TServer m_redisWrapperApplicationServer = null;
     public TServer m_wieraServer = null;
+    public LocalInstanceToWieraIface.Client m_wieraClient;
+    public Lock m_lockForWieraClient = new ReentrantLock();
+    public PeerInstancesManager m_peerInstanceManager = null;
+    public ApplicationToLocalInstanceInterface m_applicationToLocalInstanceInterface = null;
+
+
+
+    // Storage Tiers
     public Tiers m_tiers = null;
     public String m_strDefaultTierName = null;
-    public Metrics m_localInfo = null;
+    private boolean m_bRedisSupport = false;
 
-    // Threads that process events are stored in this vector, for now they only process threshold events
-    //private Vector<EventDispatch> eventDispatchThreads = null;
 
-    // We have a thread(s) waiting for action events to occur, i.e putObject and getObject actions. We use these following conditions
-    // to wake those threads up for servicing the putObject/getObject actions also threshold values are evaluated when these external
-    // events change the state of LocalInstance. For now since Event Dispatch threads evaluate only threshold events these conditions
-    // will be used to indicate to them that threshold events can be evaluated.
+    // Event related variables
+
     public ReentrantLock onPutSignalLock = null;
     public Condition putEventOccurred = null;
     public ReentrantLock onGetSignalLock = null;
@@ -73,77 +118,115 @@ public class LocalInstance {
     // This list tracks the threhold events the system will evaluate
     public ArrayList<UUID> thresholdEvents = null;
 
-    // This list tracks the timer events the system will evaluate
-    // public static HashMap<String, Class> stringToResponse = null;
 
-    //From config.txt
-    final private int defaultWorkerCount = 1;
-    private int workerCount = defaultWorkerCount;
 
-    final private int defaultEDTCount = 1;
-    private int edtCount = defaultEDTCount;
 
-    private boolean m_bRedisSupport = false;
-    private boolean m_bVersioningSupport = false;
-    // This is a hack we generate a new key for each incarnation of LocalInstance, instead
-    // we should be reading the key from a file
-    public String encryptionAlgorithm = "AES";
-    public Key encryptionKey = null;
 
-    // We will start listening for client putObject/getObject on this port
-    final private int defaultPort = 55555;
-    private int m_nServerPortForApplication = defaultPort;
-    private int m_nServerPortForWiera = 0;
 
-	/*// The following globals give us the locations where we need to store data
-	public String s3BucketName = defaultS3BucketName;
-	public String s3Folder = defaultS3Folder;
-	public String ebsFolder = defaultEBSFolder;
-	public String serverList = defaultServerList;
-	public String ephemeralFolder = defaultEphemeralFolder;
-	public String s3KeyID = defaultS3KeyID;
-	public String s3SecretID = defaultS3SecretID;*/
 
-    // This function doesn't do much now just initializes the metadata store (allocates memory for it).
-    // In the future when we move to a key value store of some kind we might need to do more things then
-    public LocalInstanceToWieraIface.Client m_wieraClient;
-    Lock m_lockForWieraClient = new ReentrantLock();
 
-    String m_strManagerIP;
-    int m_nManagerPort = 0;
 
-    //TServer m_localInstanceServer;
-    //long m_lLocalInstanceServerPort = 0;
 
-    //Wiera id where the LocalInstance instance are running for
-    protected String m_strPolicyID;
-    protected boolean m_bStandAloneMode;
+    /////////////////////// Initialization /////////////////////////
 
-    //	public SocketComm m_instanceManagerComm = null;
-    public PeerInstancesManager m_peerInstanceManager = null;
-    public ApplicationToLocalInstanceInterface m_applicationToLocalInstanceInterface = null; //This is for forwarded request for now.
 
-    public boolean isVersionSupported() {
-        return m_bVersioningSupport;
+    public LocalInstance(String configFileName, JSONObject policy, boolean bStandAlone) throws NoSuchFieldException, IOException {
+        m_bStandAloneMode = bStandAlone;
+        m_strPolicyID = (String) policy.get(ID);
+        JSONObject localPolicy;
+        if(configFileName != null){
+            m_strDefaultConfig= configFileName;
+        }
+
+        if(policy.has(LocalServer.getHostName()) == true)
+        {
+            localPolicy = policy.getJSONObject(LocalServer.getHostName());
+        } else {
+            throw new NoSuchFieldException();
+        }
+
+        if(m_bStandAloneMode == true) {
+            System.out.println("Local instance is running stand alone mode without peers");
+        }
+
+        // Parse the config file to see if we want any default values to be overridden
+        initConfiguration(configFileName);
+
+        //Connect to local instance manager.
+        initComm(localPolicy);
+
+        // As the very first step allocate the important data structures and fill out the important values
+        // Initialize the metadata store
+        initMetadataStore(m_strPolicyID);
+
+        // Initialize the list of m_tiers we can support
+        initTiers(localPolicy);
+
+        // Initialize the events that we need to execute for a policy
+        initEvents(localPolicy);
+
+        //This will manage all information related with latency and cost and so on.
+        m_localInfo = new Metrics(this);
     }
 
-    public boolean isStandAloneMode() {
-        return m_bStandAloneMode;
+    /**
+     * application_port=port for listen applications' requests;
+     * redis=boolean support redis
+     * versioning=boolean support versioning
+     * encryption=string
+     * */
+    void initConfiguration(String ConfigFileName) {
+        Properties config = new Properties();
+        String configFileName = (ConfigFileName == null) ? m_strDefaultConfig : ConfigFileName;
+
+        try {
+            FileInputStream foo = new FileInputStream(configFileName);
+            String tmp = null;
+
+            config.load(foo);
+
+            tmp = config.getProperty("workercount");
+            if (tmp != null) {
+                workerCount = Integer.parseInt(tmp);
+                if (workerCount <= 0)
+                    workerCount = defaultWorkerCount;
+            }
+
+            tmp = config.getProperty("redis");
+            if (tmp != null) {
+                m_bRedisSupport = Boolean.parseBoolean(tmp);
+            }
+
+            tmp = config.getProperty("versioning");
+            if (tmp != null) {
+                m_bVersioningSupport = Boolean.parseBoolean(tmp);
+            }
+
+            tmp = config.getProperty("encryption");
+            if (tmp != null) {
+                encryptionAlgorithm = tmp;
+            }
+
+            tmp = config.getProperty("application_port");
+            if (tmp != null) {
+                m_nServerPortForApplication = Integer.parseInt(tmp);
+            }
+        } catch (IOException e) {
+            System.out.println("LocalInstance: Failed to open config file " + configFileName);
+        }
+
+        try {
+            encryptionKey = KeyGenerator.getInstance(encryptionAlgorithm).generateKey();
+        } catch (NoSuchAlgorithmException e) {
+            System.out.println("Failed to generate key");
+        }
     }
 
-    public String getPolicyID() {
-        return m_strPolicyID;
-    }
 
-    public LocalInstanceToWieraIface.Client getWieraClient() {
-        //only one thread can use this one
-        m_lockForWieraClient.lock();
-        return m_wieraClient;
-    }
 
-    public void releaseWieraClient() {
-        m_lockForWieraClient.unlock();
-    }
+
+    /////////////////////// communication  /////////////////////////
+
 
     boolean initComm(JSONObject policy) {
         boolean bRet;
@@ -181,68 +264,127 @@ public class LocalInstance {
         return true;
     }
 
+    //This will let the peer server run and handle the request.
+    private boolean InitRedisWrapperServerForApplication() {
+        try {
+            //TServerSocket socket = new TServerSocket(9098); //listenPort); -> now become random port for client.
+            TServerSocket socket = new TServerSocket(6378); //listenPort); -> now become random port for client.
+            TServerTransport serverTransport = socket;
+            TProtocolFactory tProtocolFactory = new TBinaryProtocol.Factory(true, true);
+            TTransportFactory transportFactory = new TFramedTransport.Factory(1048576 * 200);    //Set max size
+            RedisWrapperApplicationInterface redis = new RedisWrapperApplicationInterface(this);
+            RedisWrapperApplicationIface.Processor processor = new RedisWrapperApplicationIface.Processor(redis);
+            m_redisWrapperApplicationServer = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport)
+                    .minWorkerThreads(16) // TODO Take this as arguments from user
+                    .maxWorkerThreads(64) // TODO Take this as arguments from user
+                    .inputTransportFactory(transportFactory)
+                    .outputTransportFactory(transportFactory)
+                    .inputProtocolFactory(tProtocolFactory)
+                    .outputProtocolFactory(tProtocolFactory)
+                    .processor(processor));
+
+            return true;
+        } catch (Exception e) {
+            System.out.println("Error: Failed to setup listen socket. Exiting");
+            e.printStackTrace();
+
+        }
+
+        return false;
+    }
+
+    //Provide services for applications(clients)
+    private boolean InitServerForApplication() {
+        TServerSocket socket = null;
+
+        //55555 is preferred for Application Server
+        try {
+            socket = new TServerSocket(m_nServerPortForApplication); //random port for client.
+        } catch (Exception e) {
+            //already taken
+            socket = null;
+        }
+
+        try {
+            if (socket == null) {
+                socket = new TServerSocket(0); //random port for client.
+            }
+
+            TServerTransport serverTransport = socket;
+            TProtocolFactory tProtocolFactory = new TBinaryProtocol.Factory(true, true);
+            TTransportFactory transportFactory = new TFramedTransport.Factory(1048576 * 200);    //Set max size
+            m_applicationToLocalInstanceInterface = new ApplicationToLocalInstanceInterface(this);
+            ApplicationToLocalInstanceIface.Processor processor = new ApplicationToLocalInstanceIface.Processor(m_applicationToLocalInstanceInterface);
+            m_applicationServer = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport)
+                    .minWorkerThreads(16) // TODO Take this as arguments from user
+                    .maxWorkerThreads(64) // TODO Take this as arguments from user
+                    .inputTransportFactory(transportFactory)
+                    .outputTransportFactory(transportFactory)
+                    .inputProtocolFactory(tProtocolFactory)
+                    .outputProtocolFactory(tProtocolFactory)
+                    .processor(processor));
+
+            //Port for application
+            m_nServerPortForApplication = socket.getServerSocket().getLocalPort();
+            return true;
+        } catch (Exception e) {
+            System.out.println("Error: Failed to setup listen socket. Exiting");
+            e.printStackTrace();
+        }
+
+        return false;
+    }
+    // Provide services for Wiera central
+    private boolean InitServerForWiera() {
+        try {
+            //For now we set to hard-coded port for Azure.
+            TServerSocket socket = new TServerSocket(0); //listenPort); -> now become random port for client.
+            TServerTransport serverTransport = socket;
+            TProtocolFactory tProtocolFactory = new TBinaryProtocol.Factory(true, true);
+            TTransportFactory transportFactory = new TFramedTransport.Factory();
+            WieraToLocalInstanceInterface inter = new WieraToLocalInstanceInterface(this);
+            WieraToLocalInstanceIface.Processor processor = new WieraToLocalInstanceIface.Processor(inter);
+            m_wieraServer = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport)
+                    .minWorkerThreads(3) // TODO Take this as arguments from user
+                    .maxWorkerThreads(10) // TODO Take this as arguments from user
+                    .inputTransportFactory(transportFactory)
+                    .outputTransportFactory(transportFactory)
+                    .inputProtocolFactory(tProtocolFactory)
+                    .outputProtocolFactory(tProtocolFactory)
+                    .processor(processor));
+
+            //Port for Wiera
+            m_nServerPortForWiera = socket.getServerSocket().getLocalPort();
+            return true;
+        } catch (Exception e) {
+            System.out.println("Error: Failed to setup listen socket. Exiting");
+            e.printStackTrace();
+        }
+
+        return false;
+    }
+    //Provides services for peers
+    private boolean InitServerForPeers() {
+        m_peerInstanceManager = new PeerInstancesManager(this);
+
+
+        return true;
+    }
+
+
+
+    //////////////////////// Initalization of metadata ////////////////////
+
+
     void initMetadataStore(String strWieraID) throws IOException {
         m_keyLocker = new KeyLocker();
         m_metadataStore = new MetadataStore(strWieraID);
         m_metadataStore.init();
     }
 
-    // This function will parse the config file and load up values for m_tiers and other parameters
-    void initConfiguration(String ConfigFileName) {
-        Properties config = new Properties();
-        String configFileName = (ConfigFileName == null) ? "config.txt" : ConfigFileName;
 
-        try {
-            FileInputStream foo = new FileInputStream(configFileName);
-            String tmp = null;
 
-            // Load config file properties
-            config.load(foo);
-
-            tmp = config.getProperty("workercount");
-            if (tmp != null) {
-                workerCount = Integer.parseInt(tmp);
-                if (workerCount <= 0)
-                    workerCount = defaultWorkerCount;
-            }
-
-            tmp = config.getProperty("edtcount");
-            if (tmp != null) {
-                edtCount = Integer.parseInt(tmp);
-                if (edtCount <= 0)
-                    edtCount = defaultEDTCount;
-            }
-
-            tmp = config.getProperty("redis");
-            if (tmp != null) {
-                m_bRedisSupport = Boolean.parseBoolean(tmp);
-            }
-
-            tmp = config.getProperty("versioning");
-            if (tmp != null) {
-                m_bVersioningSupport = Boolean.parseBoolean(tmp);
-            }
-
-            tmp = config.getProperty("encryption");
-            if (tmp != null) {
-                encryptionAlgorithm = tmp;
-            }
-
-            tmp = config.getProperty("application_port");
-            if (tmp != null) {
-                m_nServerPortForApplication = Integer.parseInt(tmp);
-            }
-        } catch (IOException e) {
-            System.out.println("LocalInstance: Failed to open config file " + configFileName);
-        }
-
-        try {
-            encryptionKey = KeyGenerator.getInstance(encryptionAlgorithm).generateKey();
-        } catch (NoSuchAlgorithmException e) {
-            System.out.println("Failed to generate key");
-        }
-    }
-
+    ////////////////////////////Initialization of Storage tiers ///////////////////
     // Nothing special just populate the list of m_tiers that we can support in the prototype.
     // NOTE: We expect things to be in place, i.e we expect the S3 bucket to already be present
     // and the same goes for EBS volumes and the Ephemeral volumes. We do not
@@ -254,6 +396,10 @@ public class LocalInstance {
             m_strDefaultTierName = m_tiers.getDefaultTier().getTierName();
         }
     }
+
+
+    ////////////////////Initialization of Events and response ///////////////////
+
 
     List initResponses(JSONArray jsonResponses, String strEventName) {
         JSONObject jsonResponse;
@@ -367,132 +513,15 @@ public class LocalInstance {
             }
         }
 
-        //Sample event
-        //Response SimplePutResponse = new StoreResponse(this, "S3");
-        //Response SimplePutResponse = new StoreResponse(this, "local_redis");
-        //Response SimplePutResponse = new StoreResponse(this, "local_disk");
 
-        //Simple getObject and putObject Event
-        //Can be combined with or operator
-        //pre-defined storage type : cheapest_storage, fastest_storage, persistent_storage, workload_aware_storage
-        //Response simplePutResponse = new StoreResponse(this, "local_disk");
-        //Response simplePutResponse = new StoreResponse(this, "ebs-st1");
-		/*Response adaptivePutResponse = new StoreAdaptvelyResponse(this, CHEAPEST, 100);
-		Event simplePutEvent = new ActionPutEvent(adaptivePutResponse);
-		onPutEvents.add(m_eventRegistry.addEvent(simplePutEvent));
-*/
-        //Action Get Event
-        //Response simpleGetResponse = new RetrieveResponse(this);
-        //Event simpleGetEvent = new ActionGetEvent(simpleGetResponse);
-
-        //Response adaptiveGetResponse = new FetchAdaptivelyResponse(this, CHEAPEST, 100);
-        //Event simpleGetEvent = new ActionGetEvent(adaptiveGetResponse);
-        //onGetEvents.add(m_eventRegistry.addEvent(simpleGetEvent));
-
-        //Regularly run event
-        //eventDispatchThreads = new Vector<EventDispatch>();
-
-        //Partitioned and merged.
-        //Partition data
-//		ArrayList tierList = m_tiers.getTierListWithType(Tier.TIER_TYPE.CLOUD_STORAGE);
-//
-//		Response response = new SplitDataResponse(this, tierList, tierList.size() - 2, 2, 3);
-//		Event SimplePutEvent = new ActionPutEvent(response);
-//		onPutEvents.add(m_eventRegistry.addEvent(SimplePutEvent));
-//
-//		//Action Get Event
-//		response = new MergeDataResponse(this, tierList, tierList.size() - 2, 2, 3);
-//		Event SimpleGetEvent = new ActionGetEvent(response);
-//		onGetEvents.add(m_eventRegistry.addEvent(SimpleGetEvent));
-
-
-        // Start threshold events
-
-        //Experiment 1
-        //Latency 800 ms
-        //Period 30 seconds
-        //EventualConsistencyResponse period 2 seconds Change data distribution at run-time
-//		Event latencyThresholdEvent = new MonitoringOperationLatencyEvent(this, new ChangeEventResponseResponse(this), dataDistribution, 800, 30000, 1000);
-//		thresholdEvents.add(m_eventRegistry.addEvent(latencyThresholdEvent));
-
-        //Experiment 2
-        //Change primary instance dynamically.
-        //Event requestThresholdEvent = new MonitoringRequestCntEvent(this, new ChangePrimaryResponse(this), 15000);
-        //thresholdEvents.add(m_eventRegistry.addEvent(requestThresholdEvent));
-
-        //Experiment 3
-        //Move data to cheaper tier.
-        // Last parameter in Second
-        //Event coldDataThresholdEvent = new MonitoringColdDataEvent(this, new MoveResponse(this), 10);
-        //thresholdEvents.add(m_eventRegistry.addEvent(coldDataThresholdEvent));
-
-        //Wiera Experiment 2
-        //Change data placement if needed.
-        //Event requestMonitoingEvent = new MonitoringRequestCntEvent(this, new ChangeDataPlacementResponse(this), 10000);
-        //thresholdEvents.add(m_eventRegistry.addEvent(requestMonitoingEvent));
-
-
-        // Start threads that evaluates threshold events when a putObject occurs
-//		for (int i = 0; i < edtCount; i++)
-//		{
-        //Timeout 600000-> 600seconds
-        //EventDispatch edtThread = new EventDispatch(thresholdEvents, onPutSignalLock, putEventOccurred, m_eventRegistry, 10000);
-        //edtThread.start();
-        //eventDispatchThreads.add(edtThread);
-
-        //Thread for finding cold data
-        //For every 10 seconds
-        //edtThread = new EventDispatch(thresholdEvents, onPutSignalLock, putEventOccurred, m_eventRegistry, 10000);
-        //edtThread.start();
-        //eventDispatchThreads.add(edtThread);
-
-        // Start threads that evaluates thresholds when a getObject occurs
-        //	eventDispatchThreads.add(edtThread);
-        //	edtThread = new EventDispatch(thresholdEvents, onGetSignalLock, getEventOccurred, m_eventRegistry );
-        //	edtThread.start();
-        //	eventDispatchThreads.add(edtThread);
-        //}
     }
-    //Will be chaged based on information on Wiera.
-    public LocalInstance(String configFileName, JSONObject policy, boolean bStandAlone) throws NoSuchFieldException, IOException {
-        m_bStandAloneMode = bStandAlone;
-        m_strPolicyID = (String) policy.get(ID);
-        JSONObject localPolicy;
 
-        if(policy.has(LocalServer.getHostName()) == true)
-        {
-            localPolicy = policy.getJSONObject(LocalServer.getHostName());
-        } else {
-            throw new NoSuchFieldException();
-        }
 
-        if(m_bStandAloneMode == true) {
-            System.out.println("Local instance is running stand alone mode without peers");
-        }
+    ///////////////////// Start this instance, called by caller /////////////////////
 
-        //Connect to local instance manager.
-        initComm(localPolicy);
-
-        // As the very first step allocate the important data structures and fill out the important values
-        // Initialize the metadata store
-        initMetadataStore(m_strPolicyID);
-
-        // Parse the config file to see if we want any default values to be overridden
-        //Worker, Process for event, encrytion
-        initConfiguration(configFileName);
-
-        // Initialize the list of m_tiers we can support
-        initTiers(localPolicy);
-
-        // Initialize the events that we need to execute for a policy
-        initEvents(localPolicy);
-
-        //This will manage all information related with latency and cost and so on.
-        m_localInfo = new Metrics(this);
-    }
 
     public void runForever(JSONObject policy) {
-        //Now run thrift server forever
+        //Start services for applications (clients)
         Thread applicationServerThread = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -537,7 +566,7 @@ public class LocalInstance {
 
         Thread wieraThread = null;
 
-        //start Wiera server and register
+        //Start services for Wiera central and register (instance)
         wieraThread = new Thread(new Runnable() {
             @Override
             public void run() {
@@ -558,9 +587,6 @@ public class LocalInstance {
         }
 
         System.out.format("LocalInstance Instance Server starts waiting Wiera's requests from port: %d\n", m_nServerPortForWiera);
-
-        //Since Wiera will call peerInfo when there is a new local instance.
-        //Server should be run first.
         registerToWiera(policy);
 
         try {
@@ -592,133 +618,6 @@ public class LocalInstance {
         System.out.println("Exception but this instance will be terminated.");
     }
 
-    //This will let the peer server run and handle the request.
-    private boolean InitRedisWrapperServerForApplication() {
-        try {
-            //TServerSocket socket = new TServerSocket(9098); //listenPort); -> now become random port for client.
-            TServerSocket socket = new TServerSocket(6378); //listenPort); -> now become random port for client.
-            TServerTransport serverTransport = socket;
-            TProtocolFactory tProtocolFactory = new TBinaryProtocol.Factory(true, true);
-            TTransportFactory transportFactory = new TFramedTransport.Factory(1048576 * 200);    //Set max size
-            RedisWrapperApplicationInterface redis = new RedisWrapperApplicationInterface(this);
-            RedisWrapperApplicationIface.Processor processor = new RedisWrapperApplicationIface.Processor(redis);
-            m_redisWrapperApplicationServer = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport)
-                    .minWorkerThreads(16) // TODO Take this as arguments from user
-                    .maxWorkerThreads(64) // TODO Take this as arguments from user
-                    .inputTransportFactory(transportFactory)
-                    .outputTransportFactory(transportFactory)
-                    .inputProtocolFactory(tProtocolFactory)
-                    .outputProtocolFactory(tProtocolFactory)
-                    .processor(processor));
-
-            return true;
-        } catch (Exception e) {
-            System.out.println("Error: Failed to setup listen socket. Exiting");
-            e.printStackTrace();
-
-        }
-
-        return false;
-    }
-
-    //This will let the peer server run and handle the request.
-    private boolean InitServerForApplication() {
-        TServerSocket socket = null;
-
-        //55555 is preferred for Application Server
-        try {
-            socket = new TServerSocket(m_nServerPortForApplication); //listenPort); -> now become random port for client.
-        } catch (Exception e) {
-            //already taken
-            socket = null;
-        }
-
-        try {
-            if (socket == null) {
-                socket = new TServerSocket(0); //listenPort); -> now become random port for client.
-            }
-
-            TServerTransport serverTransport = socket;
-            TProtocolFactory tProtocolFactory = new TBinaryProtocol.Factory(true, true);
-            TTransportFactory transportFactory = new TFramedTransport.Factory(1048576 * 200);    //Set max size
-            m_applicationToLocalInstanceInterface = new ApplicationToLocalInstanceInterface(this);
-            ApplicationToLocalInstanceIface.Processor processor = new ApplicationToLocalInstanceIface.Processor(m_applicationToLocalInstanceInterface);
-            m_applicationServer = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport)
-                    .minWorkerThreads(16) // TODO Take this as arguments from user
-                    .maxWorkerThreads(64) // TODO Take this as arguments from user
-                    .inputTransportFactory(transportFactory)
-                    .outputTransportFactory(transportFactory)
-                    .inputProtocolFactory(tProtocolFactory)
-                    .outputProtocolFactory(tProtocolFactory)
-                    .processor(processor));
-
-            //Port for application
-            m_nServerPortForApplication = socket.getServerSocket().getLocalPort();
-            return true;
-        } catch (Exception e) {
-            System.out.println("Error: Failed to setup listen socket. Exiting");
-            e.printStackTrace();
-        }
-
-        return false;
-    }
-
-    private boolean InitServerForWiera() {
-        try {
-            //For now we set to hard-coded port for Azure.
-            TServerSocket socket = new TServerSocket(0); //listenPort); -> now become random port for client.
-            TServerTransport serverTransport = socket;
-            TProtocolFactory tProtocolFactory = new TBinaryProtocol.Factory(true, true);
-            TTransportFactory transportFactory = new TFramedTransport.Factory();
-            WieraToLocalInstanceInterface inter = new WieraToLocalInstanceInterface(this);
-            WieraToLocalInstanceIface.Processor processor = new WieraToLocalInstanceIface.Processor(inter);
-            m_wieraServer = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport)
-                    .minWorkerThreads(3) // TODO Take this as arguments from user
-                    .maxWorkerThreads(10) // TODO Take this as arguments from user
-                    .inputTransportFactory(transportFactory)
-                    .outputTransportFactory(transportFactory)
-                    .inputProtocolFactory(tProtocolFactory)
-                    .outputProtocolFactory(tProtocolFactory)
-                    .processor(processor));
-
-            //Port for Wiera
-            m_nServerPortForWiera = socket.getServerSocket().getLocalPort();
-            return true;
-        } catch (Exception e) {
-            System.out.println("Error: Failed to setup listen socket. Exiting");
-            e.printStackTrace();
-        }
-
-        return false;
-    }
-
-    private boolean InitServerForPeers() {
-        m_peerInstanceManager = new PeerInstancesManager(this);
-/*      String strReason = m_peerInstanceManager.setDataDistribution(policy);
-        if (strReason != null) {
-            System.out.println(strReason);
-            return false;
-        }
-*/
-
-        return true;
-    }
-
-    LocalInstanceToWieraIface.Client initWieraClient() {
-        TTransport transport;
-        transport = new TSocket(m_strManagerIP, m_nManagerPort);
-        TProtocol protocol = new TBinaryProtocol(new TFramedTransport(transport));
-        LocalInstanceToWieraIface.Client client = new LocalInstanceToWieraIface.Client(protocol);
-
-        try {
-            transport.open();
-        } catch (TException x) {
-            x.printStackTrace();
-            return null;
-        }
-
-        return client;
-    }
 
     private boolean registerToWiera(JSONObject policy) {
         int nRetryTime = 1;
@@ -747,7 +646,7 @@ public class LocalInstance {
 
             nRetryTime = nRetryTime * 2;
         }
-
+        // return local Instance information to Wiera central
         try {
             JSONObject req = new JSONObject();
             req.put(HOSTNAME, LocalServer.getHostName());
@@ -793,445 +692,34 @@ public class LocalInstance {
         return false;
     }
 
-    //The key should include the version. That is, verionedKey is required. -KS
-    public byte[] getInternal(String key, String strTierName) {
-        Tier tierInfo = m_tiers.getTier(strTierName);
+    //As a client of wiera central
+    LocalInstanceToWieraIface.Client initWieraClient() {
+        TTransport transport;
+        transport = new TSocket(m_strManagerIP, m_nManagerPort);
+        TProtocol protocol = new TBinaryProtocol(new TFramedTransport(transport));
+        LocalInstanceToWieraIface.Client client = new LocalInstanceToWieraIface.Client(protocol);
 
-        if (tierInfo == null) {
-            System.out.printf("Cannot find local storage Tier information: %s\n", strTierName);
+        try {
+            transport.open();
+        } catch (TException x) {
+            x.printStackTrace();
             return null;
         }
 
-        StorageInterface interf = tierInfo.getInterface();
-
-        if (interf == null) {
-            System.out.printf("Cannot find local storage Tier interface: %s\n", strTierName);
-            return null;
-        }
-
-        //Start Timing
-        Latency latency = new Latency();
-        latency.start();
-
-        //For test purpose
-        ////////////////////////////////////////////////////////////////////////
-        ///*umn.dcsg.local.test.TestUtils.simluatedDelay(10);
-        //long nDelayedPeriod = m_peerInstanceManager.getDataDistribution().getSimulatedDelayPeriod();
-        //////////////////////////////////////////////////////////////////////////
-
-        byte[] ret = interf.doGet(key);
-
-        latency.stop();
-
-        if (m_localInfo.addTierLatency(strTierName, GET_LATENCY, latency) == false) {
-            System.out.printf("Failed to get latency into stat : %.2f\n", latency.getLatencyInMills());
-        }
-
-        return ret;
+        return client;
     }
 
-    public int getLatestVersion(String key) {
-        MetaObjectInfo obj = getMetadata(key);
-
-        if (obj != null) {
-            return obj.getLastestVersion();
-        }
-
-        return MetaObjectInfo.NO_SUCH_VERSION;
+    public LocalInstanceToWieraIface.Client getWieraClient() {
+        //only one thread can use this one
+        m_lockForWieraClient.lock();
+        return m_wieraClient;
     }
 
-    //These 'get' function assumes that data is stored local locale.
-    public byte[] get(String strKey) {
-        //System.out.format("Get operation Key: %s\n", strKey);
-        return get(strKey, MetaObjectInfo.NO_SUCH_VERSION);
+    public void releaseWieraClient() {
+        m_lockForWieraClient.unlock();
     }
 
-    //Any (fastest) local tier
-    public byte[] get(String strKey, int nVer) {
-        return get(strKey, nVer, null, false);
-    }
-
-    public byte[] get(String strKey, String strTierName) {
-        return get(strKey, MetaObjectInfo.NO_SUCH_VERSION, strTierName, false);
-    }
-
-    //The bUpdateMeta will be true only if when the object is accessed by peer (forward)
-    public byte[] get(String strKey, int nVer, String strTierName, boolean bUpdateMeta) {
-        ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
-        String strVersionedKey = strKey;
-        byte[] retVal = null;
-
-        try {
-            // Get the lock for this object
-            // Lock the object down before doing anything else
-            lock.readLock().lock();
-            MetaObjectInfo obj = getMetadata(strKey);
-
-            if (obj != null) {
-                if (nVer < 0) {
-                    nVer = obj.getLastestVersion();
-                }
-
-                if (m_bVersioningSupport == true) {
-                    strVersionedKey = obj.getVersionedKey(nVer);
-                }
-
-                //Check storage tiername
-                //If tier name is not specified, just retrieve from the fastest tier
-                if (strTierName == null || strTierName.isEmpty() == true) {
-                    strTierName = obj.getLocale(nVer, true).getTierName();
-                } else if (obj.hasLocale(nVer, LocalServer.getHostName(), strTierName) == false) {
-                    //Compare metadata. Check localhost locale
-                    //If meta and desired storage tier is not the same, show error
-                    //and use the stored storage tier.
-                    Locale targetLocale = obj.getLocale(nVer, true);
-
-                    if(targetLocale == null) {
-                        System.out.printf("[debug] Failed to find available locale for the key:%s ver:%d\n", strKey, nVer);
-                        return null;
-                    }
-
-                    System.out.println("[debug] Requested local Tier Name: " + strTierName + " is not in DB but found: " + targetLocale.getTierName());
-                    strTierName = targetLocale.getTierName();
-                }
-
-                retVal = getInternal(strVersionedKey, strTierName);
-                //System.out.println("[debug] read data:\n" + new String(retVal));
-
-                if(bUpdateMeta == true) {
-                    //update information to db only when bUpdate param is true
-                    obj.countInc();
-                    obj.setLAT();
-                    commitMeta(obj);
-                }
-            } else {
-                System.out.println("Failed to find meta data associated with the key for getObject: " + strKey);
-            }
-        } catch (Exception e){
-            e.printStackTrace();
-        } finally {
-            lock.readLock().unlock();
-        }
-
-        return retVal;
-    }
-
-    HashMap<Integer, MetaVerInfo> getVersionList(String key) {
-        return m_metadataStore.getVersionList(key);
-    }
-
-    //Only allow to remove local locale (storage tier)
-    public boolean delete(String key, int nVer) {
-        ReentrantReadWriteLock lock = m_keyLocker.getLock(key);
-        try {
-            // Get the lock for this object
-            // Lock the object down before doing anything else
-            lock.writeLock().lock();
-
-            MetaObjectInfo obj = getMetadata(key);
-            Locale localLocale;
-
-            if (obj != null) {
-                String strKey = key;
-
-                //Lastest as a Default
-                if (nVer < 0) {
-                    nVer = obj.getLastestVersion();
-                }
-
-                //If same versions are repicated to multiple tiers,
-                //Remove all
-                Tier tierInfo;
-                long lObjSize = 0;
-
-                while (true) {
-                    localLocale = obj.getLocale(nVer, true);
-
-                    if (localLocale == null) {
-                        break;
-                    } else {
-                        tierInfo = m_tiers.getTier(localLocale.getTierName());
-
-                        if (m_bVersioningSupport == true) {
-                            strKey = obj.getVersionedKey(nVer);
-                        }
-
-                        //Remove object from the storage
-                        if (deleteInternal(strKey, localLocale.getTierName(), lObjSize) == false) {
-                            System.out.printf("Failed to delete key from tier: %s\n", localLocale.getTierName());
-                            break;
-                        }
-                    }
-                }
-
-                return true;
-            } else {
-                //	System.out.println("Failed to find meta data associated with the key: " + key);
-            }
-        } finally {
-            lock.writeLock().unlock();
-        }
-
-        return false;
-    }
-
-    public boolean deleteInternal(String strKey, String strTierName, long lSize) {
-        boolean ret = false;
-        Tier tierInfo = m_tiers.getTier(strTierName);
-
-        try {
-            if (tierInfo != null) {
-                StorageInterface interf = tierInfo.getInterface();
-                if (interf != null) {
-                    ret = interf.doDelete(strKey);
-
-                    if (ret == true) {
-                        tierInfo.freeSpace(lSize);
-                    }
-                }
-
-                return ret;
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        return false;
-    }
-
-    public boolean deleteInternal(MetaObjectInfo obj, String strTierName) {
-        return deleteInternal(obj.m_key, strTierName, obj.getSize());
-    }
-	/*public boolean deleteObject(String key, int level)
-	  {
-	  boolean retVal = false;
-	  write.lock();
-	  retVal = (storageInterfaceMap.getObject(level)).deleteObject(key);
-	  write.unlock();
-	  return retVal;
-	  }*/
-
-    //This function does not consider the version. The code which calls this function should make new key. - KS
-    //Storing latency for each tier is now added
-    public boolean putInternal(String strKey, byte[] value, String strTierName) {
-        Tier tierInfo = m_tiers.getTier(strTierName);
-        StorageInterface interf;
-
-        if (tierInfo == null) {
-            System.out.printf("Cannot find storage Tier information: %s\n", strTierName);
-            return false;
-        }
-
-        interf = tierInfo.getInterface();
-
-        if (interf == null) {
-            System.out.printf("Cannot find storage Tier interface: %s\n", strTierName);
-            return false;
-        }
-
-        //Check free space first
-        long lRequiredSpace = value.length;
-
-        //Check already exist
-        if(isVersionSupported() == false && containsKey(strKey, strTierName) == true) {
-            long lSize = getMetadata(strKey).getSize();
-            lRequiredSpace -= lSize;
-
-            System.out.printf("[debug] RequiredSpace: %d size in meta: %d\n", lRequiredSpace, lSize);
-        }
-
-        //Check storage size
-        if (tierInfo.checkFreeSpace(lRequiredSpace) == false) {
-            System.out.printf("Storage Tier:%s does not have enough free space (freeSpace: %d).\n", strTierName, tierInfo.getFreeSpace());
-            return false;
-        }
-
-        //Start Tier latency
-        Latency latency = new Latency();
-        latency.start();
-
-        //Simulated delay as dynamics
-        //For test purpose
-        ////////////////////////////////////////////////////////////////////////
-        //m_peerInstanceManager.getDataDistribution().getSimulatedDelayPeriod()
-        //umn.dcsg.local.test.TestUtils.simluatedDelay();
-        //////////////////////////////////////////////////////////////////////////
-        boolean ret = interf.doPut(strKey, value);
-
-        if (ret == true) {
-            //tierInfo.useSpace(value.length);
-            //Update used storage size
-            tierInfo.useSpace(lRequiredSpace);
-            System.out.printf("[debug] Tier: %s free Space: %d\n", tierInfo.getTierName(), tierInfo.getFreeSpace());
-
-            latency.stop();
-
-            if (m_localInfo.addTierLatency(strTierName, PUT_LATENCY, latency) == false) {
-                System.out.printf("Failed to put latency into stat : %.2f\n", latency.getLatencyInMills());
-            }
-        }
-
-        return ret;
-    }
-
-    //Now return key nVer
-    //Let think the case, local nVer is 1 and remote nVer is 3. How to handle nVer 2. Ignore?
-    //Only called in putFromPeer()
-    public MetaObjectInfo updateVersion(String key, int nVer, byte[] value, String strTierName, String strTag, long modified_time, boolean bRemovePrevious) {
-        boolean bRet;
-        MetaObjectInfo obj = null;
-        ReentrantReadWriteLock lock = m_keyLocker.getLock(key);
-
-        try {
-            lock.writeLock().lock();
-            obj = getMetadata(key);
-
-            //This should not happen
-            if (obj == null) {
-                System.out.println("Failed to find metadata for the key: " + key + "This should not happen!!!");
-                return null;
-            } else {
-                String strCurTierName = obj.getLocale(true).getTierName();
-                obj.updateVersion(nVer, LocalServer.getHostName(), strTierName, getLocalStorageTierType(strTierName), modified_time, value.length);
-
-                //try to updates
-                String strVersionedKey = obj.getVersionedKey(nVer);
-                bRet = putInternal(strVersionedKey, value, strTierName);
-
-                if (bRet == true) {
-                    //Need to handle changed location.
-                    if (isVersionSupported() == false) {
-                        //maybe need to remove previous replica as it is moved to other location if Tiername Changed
-                        if (strCurTierName.compareTo(strTierName) != 0) {
-                            //Remove previous one in this instance
-                            obj.addLocale(LocalServer.getHostName(), strTierName, getLocalStorageTierType(strTierName));
-                            obj.removeLocale(LocalServer.getHostName(), strCurTierName);
-
-                            if (bRemovePrevious == true) {
-                                //Todo delete operation can be done in the background with dedicated thread
-                                deleteInternal(obj, strCurTierName);
-                                //System.out.println("!Delete key :" + strVersionedKey + " stored in " + strCurTierName);
-                            }
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-        } finally {
-            lock.writeLock().unlock();
-        }
-
-        return obj;
-    }
-
-    public MetaObjectInfo getMetadata(String strKey) {
-        MetaObjectInfo obj = m_metadataStore.getObject(strKey);
-
-        //update last accessed time
-        if(obj != null) {
-            obj.setLAT(System.currentTimeMillis());
-        }
-
-        return obj;
-    }
-
-    //Assume that all functions calling this function already have a lock for the key
-    public MetaObjectInfo updateMetadata(String strKey, String strHostName, String strTierName, int nValueSize, String strTag, Boolean bSupportVersion, Boolean bIsLocalTier) {
-        MetaObjectInfo obj = getMetadata(strKey);
-        long curTime = System.currentTimeMillis();
-        TierInfo.TIER_TYPE type;
-
-        if (bIsLocalTier == true) {
-            type = m_tiers.getTierType(strTierName);
-        } else {
-            type = REMOTE_TIER;
-        }
-
-        if (type == null) {
-            System.out.println("Cannot find storage tier name :\"" + strTierName + "\" from local instance.");
-            return null;
-        }
-
-        //if not exist, create it
-        if (obj == null) {
-            //Create new
-            obj = new MetaObjectInfo(strKey, strHostName, strTierName, type, nValueSize, strTag, bSupportVersion);
-        }
-
-        if (bSupportVersion == true) {
-            //Add new version for putObject operation.
-            obj.addNewVersion(strHostName, strTierName, type, curTime, nValueSize);
-        }
-
-        try {
-            obj.countInc();
-            obj.setLAT(curTime);
-            obj.setDirty();
-            obj.setLastModifiedTime(obj.getLAT()); //added for EventualConsistencyResponse consistecny for now. (will use vector or something else);
-            obj.setSize(nValueSize);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        return obj;
-    }
-
-    //If this not called, meta will not updated
-    public boolean commitMeta(MetaObjectInfo obj) {
-        try {
-            m_metadataStore.putObject(obj);
-            return true;
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-
-        return false;
-    }
-
-    //This function will be used only when data is stored in non-local instance within Wiera
-    public MetaObjectInfo updateMetaDataOnly(String strKey, String strHostName, String strTierName, String strTag) {
-        ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
-
-        lock.writeLock().lock();
-        MetaObjectInfo obj = updateMetadata(strKey, strHostName, strTierName, strTierName.length(), strTag, isVersionSupported(), false);
-        lock.writeLock().unlock();
-
-        return obj;
-    }
-
-    //Now return object info
-    //This function only used for a new version
-    //The bUpdateMeta will be true only if when the object is accessed by peer (forward)
-    public MetaObjectInfo put(String strKey, byte[] value, String strTierName, String strTag, boolean bUpdateMeta) {
-        ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
-        MetaObjectInfo obj;
-
-        try {
-            //System.out.format("Put operation Key: %s Size: %d TierName: %s\n", strKey, value.length, strTierName);
-            lock.writeLock().lock();
-
-            obj = updateMetadata(strKey, LocalServer.getHostName(), strTierName, value.length, strTag, m_bVersioningSupport, true);
-            if (obj != null) {
-                String strVersionedKey = obj.getVersionedKey();
-                if (putInternal(strVersionedKey, value, strTierName) == false) {
-                    System.out.format("Failed to putObject the object key: %s\n", strVersionedKey);
-                    return null;
-                } else {
-                    //This function should be called to update meta information
-                    obj.addLocale(LocalServer.getHostName(), strTierName, getLocalStorageTierType(strTierName));
-
-                    if(bUpdateMeta == true) {
-                        commitMeta(obj);
-                    }
-                }
-            }
-        } finally {
-            lock.writeLock().unlock();
-        }
-
-        return obj;
-    }
+    /////////////////////////// Stop this instance ///////////////////////
 
     //Close all server and stop working.
     //Stop all server. Need to check all requests are handled first.
@@ -1259,12 +747,306 @@ public class LocalInstance {
         return true;
     }
 
+
+
+    /////////////////////////// Methods ///////////////////////
+
+    public boolean isVersionSupported() {
+        return m_bVersioningSupport;
+    }
+
+    public boolean isStandAloneMode() {
+        return m_bStandAloneMode;
+    }
+
+    public String getPolicyID() {
+        return m_strPolicyID;
+    }
+
+
+    public String formatTransfer(String strKey, int nVer) {
+        String rs_strKey = String.format(KEY_TRANSLATE_FORMAT, strKey, nVer);
+        return rs_strKey;
+    }
+
+
+
+
+    public MetaObjectInfo getMetadata(String strKey) {
+        MetaObjectInfo obj = m_metadataStore.getObject(strKey);
+        return obj;
+    }
+    //If this not called, meta will not updated
+    public boolean commitMetadata(MetaObjectInfo obj) {
+        try {
+            m_metadataStore.putObject(obj);
+            return true;
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return false;
+    }
+
+
+
+    public boolean containsKey(String key, int nVer, String strTiername){
+        boolean rs = false;
+        MetaObjectInfo obj = getMetadata(key);
+        if(obj != null){
+            rs = obj.hasLocale(nVer, strTiername);
+        }
+        return rs;
+    }
+
+
+
+    public boolean deleteInternal(String strKey, int nVer, String strTierName, long lSize) {
+        boolean ret = false;
+        Tier tier = m_tiers.getTier(strTierName);
+        try {
+            if (tier != null) {
+                StorageInterface interf = tier.getInterface();
+                if (interf != null) {
+                    if(isVersionSupported() == true){
+                        strKey = formatTransfer(strKey, nVer);
+                    }
+                    ret = interf.doDelete(strKey);
+                    if (ret == true) {
+                        tier.freeSpace(lSize);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return ret;
+    }
+
+
+    public boolean delete(String strKey, int nVer, String strTiername) {
+        boolean rs = false;
+        ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
+        try {
+            lock.writeLock().lock();
+            MetaObjectInfo obj = getMetadata(strKey);
+            Locale localLocale;
+            if (obj != null && containsKey(strKey, nVer, strTiername)) {
+                long size = obj.getSize(nVer);
+                if(deleteInternal(strKey, nVer, strTiername, size) ==  true){
+                    // update meta data.
+                    rs = obj.removeLocale(nVer, strTiername);
+                    if(rs == true){
+                        commitMetadata(obj);
+                    }
+                }
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+
+        return rs;
+    }
+
+
+    /**
+     * Nan: To support version
+     * Job of putInternal
+     *      1. update the used space.
+     *      2. translate the identifier name key with version is support versioning.
+     * */
+    public boolean putInternal(String strKey, int nVer, byte[] value, String strTierName) {
+        Tier tier = m_tiers.getTier(strTierName);
+        StorageInterface interf;
+
+        if (tier == null) {
+            System.out.printf("[Error] Cannot find storage Tier information: %s\n", strTierName);
+            return false;
+        }
+        interf = tier.getInterface();
+        if (interf == null) {
+            System.out.printf("[Error] Cannot find storage Tier interface: %s\n", strTierName);
+            return false;
+        }
+
+        long lRequiredSpace = value.length;
+
+        if (tier.checkFreeSpace(lRequiredSpace) == false) {
+
+            return false;
+        }
+        if(containsKey(strKey, nVer, strTierName) == true) {
+            long lSize = getMetadata(strKey).getSize();
+            lRequiredSpace -= lSize;
+        }
+        if(isVersionSupported() == true){
+            // translate key
+            strKey = formatTransfer(strKey, nVer);
+        }
+
+        //Start Tier latency
+        Latency latency = new Latency();
+        latency.start();
+
+        boolean ret = interf.doPut(strKey, value);
+
+        if (ret == true) {
+            tier.useSpace(lRequiredSpace);
+            latency.stop();
+            if (m_localInfo.addTierLatency(strTierName, PUT_LATENCY, latency) == false) {
+                System.out.printf("Failed to put latency into stat : %.2f\n", latency.getLatencyInMills());
+            }
+        }
+
+        return ret;
+    }
+
+    public MetaObjectInfo put(String strKey, int nVer, byte [] value, String strTierName){
+        ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
+        MetaObjectInfo obj = null;
+        try {
+            lock.writeLock().lock();
+            if (putInternal(strKey, nVer, value, strTierName) == true) {
+                obj = getMetadata(strKey);
+                if(obj != null){
+                    obj.updateVersion(nVer, LocalServer.getHostName(), strTierName, m_tiers.getTierType(strTierName), System.currentTimeMillis(), value.length);
+                }else{
+                    obj = new MetaObjectInfo(nVer, strKey, LocalServer.getHostName(), strTierName, m_tiers.getTierType(strTierName), System.currentTimeMillis(), value.length, "", m_bVersioningSupport);
+                }
+                commitMetadata(obj);
+            }
+        } finally {
+            lock.writeLock().unlock();
+        }
+        return obj;
+    }
+
+
+
+
+    public byte[] getInternal(String strKey, int nVer, String strTierName) {
+        Tier tier = m_tiers.getTier(strTierName);
+
+        if (tier == null) {
+            System.out.printf("Cannot find local storage Tier information: %s\n", strTierName);
+            return null;
+        }
+
+        StorageInterface interf = tier.getInterface();
+
+        if (interf == null) {
+            System.out.printf("Cannot find local storage Tier interface: %s\n", strTierName);
+            return null;
+        }
+        Latency latency = new Latency();
+        latency.start();
+
+        if(isVersionSupported() ==  true) {
+            // translate key
+            strKey = String.format(KEY_TRANSLATE_FORMAT , strKey, nVer);
+        }
+        byte[] ret = interf.doGet(strKey);
+
+        latency.stop();
+
+        if (m_localInfo.addTierLatency(strTierName, GET_LATENCY, latency) == false) {
+            System.out.printf("Failed to get latency into stat : %.2f\n", latency.getLatencyInMills());
+        }
+
+        return ret;
+    }
+
+    public byte[] get(String strKey, int nVer, String strTierName){
+        ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
+        MetaObjectInfo obj = null;
+        byte [] value;
+        try {
+            lock.readLock().lock();
+            value = getInternal(strKey, nVer,strTierName);
+            if (value != null){
+                obj = getMetadata(strKey);
+                if(obj != null){
+                    // obj update access time ....
+                }else{
+                    System.out.println("[Error] Inconsistent metadata.");
+                    System.exit(1);
+                }
+            }
+        } finally {
+            lock.readLock().unlock();
+        }
+        return value;
+    }
+
+    ////////////////////// Version //////////////////////////
+
+    // Nan:
+    public int getLatestVersion(String strKey) {
+        MetaObjectInfo obj = getMetadata(strKey);
+
+        if (obj != null) {
+            return obj.getLatestVersion();
+        }
+
+        return MetaObjectInfo.NO_SUCH_KEY;
+    }
+
+
+    HashMap<Integer, MetaVerInfo> getVersionList(String key) {
+        return m_metadataStore.getVersionList(key);
+    }
+
+
+    /////////////////////////////////////Get /////////////////////////////////////
+    //Nan:
+    //These 'get' function assumes that data is stored local locale.
+    //Get the one with latest version
+    public byte[] get(String strKey) {
+        return get(strKey, getLatestVersion(strKey));
+    }
+    //Nan: not the fastest one, but user default one.
+    public byte[] get(String strKey, int nVer) {
+        return get(strKey, nVer,  m_strDefaultTierName);
+    }
+    public byte[] get(String strKey, String strTiername){
+        return get(strKey, getLatestVersion(strKey), strTiername);
+    }
+
+    //////////////////////////Delete /////////////////////////////////
+
+    public boolean delete(String strKey){
+        return delete(strKey, getLatestVersion(strKey));
+    }
+    public boolean delete(String strKey, int nVer) {
+        return delete(strKey, nVer, m_strDefaultTierName);
+    }
+
+
+    //////////////////////////PUT ////////////////////////////
+    public MetaObjectInfo put(String strKey, byte[] value){
+        return put(strKey, getLatestVersion(strKey) + 1, value);
+    }
+    public MetaObjectInfo put(String strKey, int nVer, byte [] value){
+        return put(strKey, nVer, value, m_strDefaultTierName);
+    }
+    public MetaObjectInfo put(String strKey,  byte [] value, String strTiername){
+        return put(strKey, getLatestVersion(strKey) + 1, value, m_strDefaultTierName);
+    }
+
+    //////////////////////Contains key ///////////////////////
+    public boolean containsKey(String strKey, String strTierName) {
+        return containsKey(strKey, getLatestVersion(strKey), strTierName);
+
+    }
+
+
+    //Kwangsung
     //Data may not be stored in local
     public boolean isLocalStorageTier(String strTierName) {
         Tier tierInfo = m_tiers.getTier(strTierName);
         return tierInfo != null;
     }
-
+    // Kwangsung
     //Data may not be stored in local
     public TierInfo.TIER_TYPE getLocalStorageTierType(String strTierName) {
         Tier tierInfo = m_tiers.getTier(strTierName);
@@ -1276,7 +1058,7 @@ public class LocalInstance {
             return REMOTE_TIER;
         }
     }
-
+    // Kwangsung
     //Data may not be stored in local
     public Locale getLocaleWithID(String strLocaleID) {
         String strHostName = strLocaleID.split(":")[0];
@@ -1298,19 +1080,4 @@ public class LocalInstance {
         }
     }
 
-    public boolean containsKey(String strKey, String strTierName) {
-        return containsKey(strKey, MetaObjectInfo.LATEST_VERSION, strTierName);
-
-    }
-
-    //Data may not be stored in local
-    public boolean containsKey(String strKey, int nVer, String strTierName) {
-        MetaObjectInfo obj = getMetadata(strKey);
-
-        if(obj != null) {
-            return obj.hasLocale(nVer, Locale.getLocaleID(LocalServer.getHostName(), strTierName));
-        }
-
-        return false;
-    }
 }

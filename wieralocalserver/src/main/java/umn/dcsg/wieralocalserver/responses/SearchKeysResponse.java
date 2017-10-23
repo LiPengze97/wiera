@@ -81,7 +81,7 @@ public class SearchKeysResponse extends Response {
 
     @Override
     public boolean respond(Map<String, Object> responseParams) {
-        boolean bRet = true;
+        boolean bRet = true;/*
         try {
             QUERY_TYPE_SUPPORTED queryType = (QUERY_TYPE_SUPPORTED) responseParams.get(QUERY_TYPE);
             Map<MetaObjectInfo, Vector<Integer>> keys = null;
@@ -118,7 +118,7 @@ public class SearchKeysResponse extends Response {
 
         } catch (Exception e) {
             e.printStackTrace();
-        }
+        }*/
 
         return false;
     }

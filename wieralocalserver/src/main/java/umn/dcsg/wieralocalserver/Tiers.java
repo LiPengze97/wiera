@@ -19,7 +19,7 @@ public class Tiers {
     HashMap<String, Tier> m_tierManagerByName;
     HashMap<TIER_TYPE, ArrayList> m_tierManagerByLevel;
 
-    Tiers(JSONArray jsonTiers, int nConn) //String serverList, String ebsFolder, String s3BucketName, String s3Folder, String ephemeralFolder, String s3KeyID, String s3SecretID)
+    public Tiers(JSONArray jsonTiers, int nConn)
     {
         m_tierLocker = new KeyLocker();
 
@@ -118,8 +118,17 @@ public class Tiers {
     public ArrayList getTierList() {
         return new ArrayList(m_tierManagerByName.values());
     }
-
+    //Nan
     public Tier getDefaultTier() {
+
+        // Nan: before, the default value in policy is not used.
+        // user designated has the first priority
+        for (Map.Entry<String, Tier> entry : m_tierManagerByName.entrySet()) {
+            if(entry.getValue().m_tierInfo.isDefault() == true){
+                return entry.getValue();
+            }
+        }
+
         //Find persistent fastest one as default as multiple tiers can be set as a default
         //In here find persistent storage (e.g., SSD rather than memory)
         List lstCheckTierType = Arrays.asList(SSD, HDD, CLOUD_STORAGE, CLOUD_ARCHIVAL, MEMORY);
@@ -150,8 +159,7 @@ public class Tiers {
             }
         }
 
-        //There is no available default storage
-        //This should not happen as this means there is no available storage tier in this instance
+
         return null;
     }
 }

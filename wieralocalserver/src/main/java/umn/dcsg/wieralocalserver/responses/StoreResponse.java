@@ -49,12 +49,12 @@ public class StoreResponse extends Response {
 
             if (targetLocale.isLocalLocale() == true) {
                 //Put locally
-                obj = m_localInstance.put(strKey, value, targetLocale.getTierName(), strTag, false);
+                obj = m_localInstance.put(strKey, value, targetLocale.getTierName());
 
                 if (obj != null) {
                     strReason = OK;
                     bRet = true;
-                    nVer = obj.getLastestVersion();
+                    nVer = obj.getLatestVersion();
                     lLastModifiedTime = obj.getLastModifiedTime();
 
                     //If operation latency is set then change tiername to real tier used for runtime tier changed

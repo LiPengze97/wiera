@@ -16,7 +16,7 @@ Wiera is an open-source policy-driven key-value storage system for geo-distribut
 Learn more about Wiera at [http://dcsg.cs.umn.edu/Projects/Wiera/](http://dcsg.cs.umn.edu/Projects/Wiera/)
 
 ## Building Wiera
-Please visit: [http://dcsg.cs.umn.edu/Projects/Wiera/setup.html](Wiera setup page)
+Please visit: [Wiera setup page](http://dcsg.cs.umn.edu/Projects/Wiera/setup.html)
 
 ## About
 ![](img/nsf_100x100.png) 

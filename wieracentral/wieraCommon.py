@@ -61,11 +61,13 @@ def is_valid_ip(ip):
 		# Not legal
 		return False
 
+
 def get_public_ip():
 	from urllib2 import urlopen
 	ip = urlopen('http://checkip.amazonaws.com').read()
 	ip = ip.replace('\n', '')
 	return ip
+
 
 def PrintException():
 	exc_type, exc_obj, tb = sys.exc_info()
@@ -118,9 +120,9 @@ def join_threads(thread_list, timeout=5):
 				start = time.time()
 				thread.join(timeout)
 			
-#				print str((time.time() - start) * 1000) + ' ms takes to join'
+				# print str((time.time() - start) * 1000) + ' ms takes to join'
 
-				#check whether the thread is done or timeout
+				# check whether the thread is done or timeout
 				if thread.isAlive() == True:
 					was_timeout = True
 		elif type(thread_list) is dict:
@@ -129,7 +131,7 @@ def join_threads(thread_list, timeout=5):
 				thread = thread_list[hostname]
 				thread.join(timeout)
 		
-#				print 'hostname: ' + hostname + ' ' + str(time.time() - start) + ' ms takes to join'
+				# print 'hostname: ' + hostname + ' ' + str(time.time() - start) + ' ms takes to join'
 
 				if thread.isAlive() == True:
 					was_timeout = True

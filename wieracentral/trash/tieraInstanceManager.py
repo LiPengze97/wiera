@@ -171,7 +171,7 @@ class WieraTieraInstanceHandler:
 		return json.dumps(response)
 
 class TieraInstanceManager:
-	def __init__(self, policy):#, expected_instance_cnt):
+	def __init__(self, policy):
 		self.instance_list = {}
 		self.ip = wieraCommon.get_public_ip()
 		self.port = 0

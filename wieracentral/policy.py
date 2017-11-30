@@ -12,11 +12,25 @@ sys.path.append('./trips')
 
 #import trips
 
-class Policy:	
+
+class Policy:
+	"""
+	Policy class: provide functions to start/stop instances,
+
+	Members of Policy class:
+		1). wiera (the main class), wiera_instance is just the wiera_server
+		2). policy (a map)
+		3). localInstanceManager. (different from the local server manager)
+	
+	"""
 	def __init__(self, wiera_instance, policy_spec):
 		self.wiera_instance = wiera_instance
-		self.policy_spec = policy_spec #need to be deleted
+		self.policy_spec = policy_spec  # need to be deleted
 		self.available_host_list = None
+		# Nan: policy required local servers. To successfully launch this policy, we must have these local servers run.
+		self.required_host_list = []
+		self._fetch_required_host()
+		# Nan: for TripS?
 		self.cost_info = None
 		self.goals = None
 
@@ -25,21 +39,21 @@ class Policy:
 		else:
 			self.policy_id = str(uuid.uuid4())
 
-		#should be from policy -> For now only server list
+		# should be from policy -> For now only server list
 		self.local_instance_manager = localInstanceManager.LocalInstanceManager(self)
 
-#		if 'trips' in policy_spec:
-#			self.trips = self.init_trips()
-#		self.re_evaluate_data_placement(None)
+		# if 'trips' in policy_spec:
+		# 	self.trips = self.init_trips()
+		# self.re_evaluate_data_placement(None)
 
 	def re_evaluate_data_placement(self, query):
 		if self.check_instance_cnt() == False:
 			print 'Not yet ready to evalaute data placement!!!!!!!!!!!!!!!!!!!!'
 			return 
 		
-#		if query == None:
-#		with open('./trips_data/query') as data_file:
-#		query = json.load(data_file)
+		# if query == None:
+		# 	with open('./trips_data/query') as data_file:
+		# 		query = json.load(data_file)
 
 		monitoring_info = self.local_instance_manager.get_monitoring_info()
 		data_placement = self.evaluate_data_placement(query, monitoring_info)
@@ -56,7 +70,7 @@ class Policy:
 			data_placement['prefer_storage_type'] = 'cheapest'
 
 			failed_list = self.broadcast(json.dumps(data_placement), 'dataPlacement')
-			#there is failed instance
+			# there is failed instance
 			if len(failed_list) > 0:
 				for hostname in failed_list:
 					print '[TIM] failed to data placement in ' + hostname + ' with a reason: ' + failed_list[hostname]['value']
@@ -112,10 +126,20 @@ class Policy:
 		return trips_instance
 
 	def get_desired_instance_cnt(self):
-#		print policy_spec['host_list']
+		# print policy_spec['host_list']
 		return len(self.policy_spec['host_list'])
 
+	def _fetch_required_host(self):
+		for hostname in self.policy_spec['host_list']:
+			self.required_host_list.append(hostname)
+
+
+
 	def check_host_status(self):
+		"""
+		Check if the policy required hosts are ready.
+		:return:
+		"""
 		result = {}
 		host_info = self.policy_spec['host_list']
 		self.available_host_list = self.wiera_instance.check_available_host(host_info)
@@ -139,6 +163,19 @@ class Policy:
 		return self.local_instance_manager.stop_server()
 
 	def start_instances(self):
+		"""
+		Check if the hosts specified in policy are ready.
+		Wrap the policy for local server.
+		start policy for a local server
+			request['type'] = 'start_instance'
+			request['id'] = self.policy_id
+			request['instance_cnt'] = self.get_desired_instance_cnt()
+			request['manager_ip'] = instance_manager_ip
+			request['manager_port'] = instance_manager_port
+			request[hostname] = self.policy_spec['host_list'][hostname]
+
+		:return:
+		"""
 		result = {}
 
 		if self.check_host_status() == False:
@@ -148,13 +185,13 @@ class Policy:
 
 		instance_manager_ip, instance_manager_port = self.get_instance_manager_address()
 
-		#send request to local server
+		# send request to local server
 		thread_list = {}
 
-		#generate request storage tier will be difference from each other from here
+		# generate request storage tier will be difference from each other from here
 
-		#if 'primary' in self.policy_spec['consistency_policy']:
-#		if self.policy_spec['data_distribution'] == 1:
+		# if 'primary' in self.policy_spec['consistency_policy']:
+		# if self.policy_spec['data_distribution'] == 1:
 #			request['primary'] = self.policy_spec['primary']
 		
 		#if 'eventual' in self.policy_spec['consistency_policy']:
@@ -168,7 +205,10 @@ class Policy:
 
 #		print self.available_host_list
 
-		for hostname in self.available_host_list:
+		# Nan: self.available_host_list stored all the local server. But only part of them are specified in policy,
+		# so we won't need to launch all of them.
+		# for hostname in self.available_host_list:
+		for hostname in self.required_host_list:
 			request = {}
 			request['type'] = 'start_instance'
 			request['id'] = self.policy_id
@@ -176,22 +216,22 @@ class Policy:
 			request['manager_ip'] = instance_manager_ip
 			request['manager_port'] = instance_manager_port
 
-			#this req will go to Local server
+			# this req will go to Local server
 			request[hostname] = self.policy_spec['host_list'][hostname]
 			req = json.dumps(request)
-
+			# via the services provided by local server to create new local instances.
 			port = self.available_host_list[hostname]['ports']
 			local_server_client, port = self.wiera_instance.local_server_manager.get_local_server_client(hostname, port)
 			
 			if local_server_client != None:
-				#make it thread.
-				#local_server_client.startInstance(req)
+				# make it thread.
+				# local_server_client.startInstance(req)
 				thread = wieraCommon.parallel_exec(local_server_client.startInstance, [req,])
 				print '[debug] sent broadcast startInstance to ' + hostname
 				thread_list[hostname] = thread
 
 		wieraCommon.join_threads(thread_list)
-#		print str(time.time() - start) + ' ms for join : ' + str(len(thread_list))
+		# print str(time.time() - start) + ' ms for join : ' + str(len(thread_list))
 
 		result['result'] = True
 		result['value'] = self.policy_id

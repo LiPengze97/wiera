@@ -16,6 +16,7 @@ from thrift.server import TServer
 from WieraToLocalInstanceIface import *
 from WieraToLocalInstanceIface.ttypes import *
 
+
 class LocalInstanceToWieraHandler:
 	def __init__(self, policy, local_instance_manager):#iera_instance_manager):
 		self.policy = policy
@@ -79,12 +80,12 @@ class LocalInstanceToWieraHandler:
 		wieraCommon.join_threads(thread_list)
 
 	def registerLocalInstance(self, instance_info, instance_ip):
-#		print 'registerTier' + str(instance_info)
+		# print 'registerTier' + str(instance_info)
 		instance_info = json.loads(instance_info)
 
 		try:
 			self.lock.acquire()
-#			print 'lock acquired'
+			# print 'lock acquired'
 			result = {}
 
 			if instance_info != None:
@@ -122,18 +123,18 @@ class LocalInstanceToWieraHandler:
 					self.local_instance_manager.add_local_instance(hostname, ip, application_port, peer_port, instance_port)
 					
 
-					#check all instance are connected
-					#only TripS mode supports data placement
+					# check all instance are connected
+					# only TripS mode supports data placement
 					if self.policy.check_instance_cnt() == True:
 						peer_info = {}
 						peer_info['value'] = self.local_instance_manager.get_connected_instances()
 						peer_info['result'] = True;
-						#create thread for update peer info to all 
+						# create thread for update peer info to all
 						thread  = threading.Thread(target=self._send_peers_info, args=(peer_info,))
 						thread.daemon = True
 						thread.start()
 
-						#make dummy access dataplacement
+						# make dummy access dataplacement
 
 					result['value'] = json.dumps(self.policy.get_cost_info())
 					result['value2'] = json.dumps(self.policy.get_goals())
@@ -145,18 +146,18 @@ class LocalInstanceToWieraHandler:
 				result['value'] = 'Failed to load request to json'
 		finally:
 			self.lock.release()
-#			print 'lock released'
+			# print 'lock released'
 
 		return json.dumps(result)
 
 	def requestPolicyChange(self, policy):
 		start = time.time()
-		#policy = json.loads(policy)
+		# policy = json.loads(policy)
 
 		response = {}
 		failed_list = self.local_instance_manager.broadcast(policy, 'policyChange')
 
-		#there is failed instance
+		# there is failed instance
 		if len(failed_list) > 0:
 			for hostname in failed_list:
 				print '[TIM] failed to change policy.' + hostname + ' with a reason: ' + failed_list[hostname]['value']
@@ -170,16 +171,24 @@ class LocalInstanceToWieraHandler:
 
 		return json.dumps(response)
 
+
 class LocalInstanceManager:
-	def __init__(self, policy):#, expected_instance_cnt):
+	"""
+	Provide services to local instances ( not local server)
+
+	"""
+
+	def __init__(self, policy):  # expected_instance_cnt):
 		self.instance_list = {}
-		self.ip = wieraCommon.get_public_ip()
+		# Nan: Prefer the IP provided by the wiera.conf. If wiera.conf does not define the IP, we will use the "http://checkip.amazonaws.com" to
+		# get IP.
+		self.ip = policy.wiera_instance.central_IP
 		self.port = 0
 		self.policy = policy
 		self.monitoring_info = {}
 
 		# set handler to our implementation
-		# to avoid any sync issue with portnumber
+		# to avoid any sync issue with port number
 		handler = LocalInstanceToWieraHandler(policy, self)
 
 		processor = LocalInstanceToWieraIface.Processor(handler)
@@ -191,10 +200,10 @@ class LocalInstanceManager:
 		self.server = TServer.TThreadPoolServer(processor, self.transport, tfactory, pfactory, daemon=True)
 		self.port = self.transport.port
 
-		#set socket thread 20 min
+		# set socket thread 20 min
 		self.server.setNumThreads(64)
 	
-		#Thrift Server Start	
+		# Thrift Server Start
 		self.instance_manager_thread = threading.Thread(target=self.run_forever, args=())
 		self.instance_manager_thread.daemon = True
 		self.instance_manager_thread.start()

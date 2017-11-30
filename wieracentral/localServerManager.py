@@ -19,10 +19,11 @@ from thrift.server import TServer
 from WieraToLocalServerIface import * 
 from WieraToLocalServerIface.ttypes import *
 
+
 class DCsMonitor:
-	#this info will come from Local Server
-	#this moudle will agreegate information which will be used for PGA
-	#this will be updsed by Local Server
+	# this info will come from Local Server
+	# this moudle will agreegate information which will be used for PGA
+	# this will be updsed by Local Server
 	update_thread = None
 
 	def __init__(self, local_server_manager):
@@ -40,15 +41,15 @@ class DCsMonitor:
 				hostname = server_info[0]
 				local_server_client, port = self.local_server_manager.get_local_server_client(hostname, 0)
 
-#				print local_server_client
+# print local_server_client
 
 				try:
 					if local_server_client != None:
 						piggy_back_info = local_server_client.ping()
 						req_json = json.loads(piggy_back_info)
 	
-#						print req_json
-						#update info
+# print req_json
+# update info
 						self.local_server_manager.update_server_info(hostname, port, req_json)
 				except Exception, e:
 					print 'TSM: Ping to Local Server ' + hostname + ':' + str(port) + ' has been failed.'
@@ -96,20 +97,24 @@ class LocalServerToWieraHandler:
 		
 		return json.dumps(result)
 	
+
 class LocalServerManager:
+	"""
+	Manage local servers.
+	"""
 	def __init__(self, port, ping_interval):
 		self.server_list = {}
 		self.wiera_server_manager_port = port
 		self.lock = threading.Lock()
 
-		#run server for Local Server
-#	self.wiera_local_server = threading.Thread(target=self._run_local_server, args=([port,]))
-#	self.wiera_local_server.daemon = True
-#	self.wiera_local_server.start()
+# run server for Local Server
+# self.wiera_local_server = threading.Thread(target=self._run_local_server, args=([port,]))
+# self.wiera_local_server.daemon = True
+# self.wiera_local_server.start()
 		self.ping_interval = ping_interval
 
-		#set ping thread
-#		self.DCsMonitor = DCsMonitor(self)
+# set ping thread
+# self.DCsMonitor = DCsMonitor(self)
 
 	def add_local_server(self, hostname, ip, port):
 		if hostname not in self.server_list:
@@ -133,11 +138,11 @@ class LocalServerManager:
 		self.server_list[hostname]['ports'][port]['thrift_client'] = client
 
 		self.server_list[hostname]['ports'][port]['aggregated'] = {}
-#		self.server_list[hostname]['ports'][port]['aggregated']['latency'] = {}
-#		self.server_list[hostname]['ports'][port]['aggregated']['bandwidth'] = {}
+# self.server_list[hostname]['ports'][port]['aggregated']['latency'] = {}
+# self.server_list[hostname]['ports'][port]['aggregated']['bandwidth'] = {}
 
-		#will store get and put history and latency for each request
-#		self.server_list[hostname]['ports'][port]['aggregated']['workload'] = {}
+# will store get and put history and latency for each request
+# self.server_list[hostname]['ports'][port]['aggregated']['workload'] = {}
 
 	def get_local_server_client(self, hostname, port):
 		if hostname in self.server_list:
@@ -149,6 +154,10 @@ class LocalServerManager:
 		return None
 			
 	def run_forever(self):
+		"""
+		Listen for local server's registration.
+		:return:
+		"""
 		# set handler to our implementation
 		handler = LocalServerToWieraHandler(self)
 
@@ -159,8 +168,7 @@ class LocalServerManager:
 
         # set server
 		server = TServer.TThreadPoolServer(processor, transport, tfactory, pfactory, daemon=True)
-
-		#set socket thread 20 min
+		# set socket thread 20 min
 		server.setNumThreads(32)
 
 		print '[TSM] Local Server Manager is ready for Local Server port:' + str(self.wiera_server_manager_port)

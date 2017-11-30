@@ -22,7 +22,11 @@ from thrift.server import TServer
 
 from operator import itemgetter
 
+
 class ApplicationToWieraHandler:
+	"""
+	The core class for handling clients' (applications) requests.
+	"""
 	def __init__(self, wiera):
 		self.wiera = wiera
 		
@@ -38,15 +42,15 @@ class ApplicationToWieraHandler:
 
 	def getInstances(self, policy_id, client_ip):
 		result = self.wiera.getInstances(policy_id, client_ip);
-#		need to be sorted based on distance
-#		instance_list.sort(self.sort_by_distance)
+# need to be sorted based on distance
+# instance_list.sort(self.sort_by_distance)
 		return result
 
 	def getLocalServerList(self):
 		result = self.wiera.getLocalServerList()
 		return result
 	
-		#need to sort. 
+		# need to sort.
 
 class GlobalPolicyManager:
 	def __init__(self):
@@ -65,22 +69,55 @@ class NetworkMonitor:
 	def __init__(self):
 		print 'to be implemented'
 
+
 class WieraServer:
+	"""
+		Create and configure a Wiera Central Server
+		1. Configuration file
+			[wiera]
+			central_server_IP =
+			local_server_port = 55559
+			applications_port = 55558
+			ping_interval = 5
+
+			[etc]
+			ui_command = True
+
+			Explanations:
+				local_server_port: listening local servers
+				applications_port: listening wiera clients
+				ping_interval ????
+		2. Create a thread for running CLI ._ui_handler
+		3. Create a thread for running the client thrift server. (core class: ApplicationToWieraHandler())
+			Service:
+				startInstances(self, policy):
+				stopInstances(self, key):
+				getInstances(self, key):
+				getLocalServerList(self):
+			Policies are stored in self.policy_manager {policy_id:policy}
+			Each policy has a localInstanceManager, which can find available local servers and create local instances according to policy.
+		4. Call run_forever to start the localServerManager.
+		5. Create a policyManager, which is used to translate and deploy the client provided policies.
+
+	"""
+
 	def __init__(self):
 		# Threading HTTP-Server
 		self.conf = conf.Conf('wiera.conf')
+		self.central_IP = self.conf.get('wiera_central_server_ip')
+		self.local_server_manager_port = self.conf.get('local_server_port')
+		self.local_server_manager_ping_interval = self.conf.get('ping_interval')
+		self.applications_port = self.conf.get('applications_port')
+		print "[Wiera] IP: " + self.central_IP
+		print "[Wiera] Port for local servers" + str(self.local_server_manager_port)
+		print "[Wiera] Port for applications: " + str(self.applications_port)
 
-		local_server_manager_port = self.conf.get('local_server_port')
-		local_server_manager_ping_interval = self.conf.get('ping_interval')
-		applications_port = self.conf.get('applications_port')
+		# LocalServerList #not instance
+		self.local_server_manager = localServerManager.LocalServerManager(self.local_server_manager_port, self.local_server_manager_ping_interval)
 
-		#LocalServerList #not instance
-		self.local_server_manager = localServerManager.LocalServerManager(local_server_manager_port, local_server_manager_ping_interval)
-
-		#web server
-#		self.web_server = wieraWebUserInterface.WieraWebUserInterface(self, 8080)
-
-		#policy manager
+		# web server
+		# self.web_server = wieraWebUserInterface.WieraWebUserInterface(self, 8080)
+		# policy manager
 		self.policy_manager = policyManager.PolicyManager()
 
 		if self.conf.get('ui_command') == True:
@@ -88,30 +125,37 @@ class WieraServer:
 			self.user_input_thread.daemon = True
 			self.user_input_thread.start()
 
-		#web server
+# web server
 
-		#Thrift server
-		self.applications_server = threading.Thread(target=self._run_applications_server, args=([applications_port,]))
+# Thrift server
+		self.applications_server = threading.Thread(target=self._run_applications_server, args=([self.applications_port, ]))
 		self.applications_server.daemon = True
 		self.applications_server.start()
 
-		#web Server
-#		web_server_thread = threading.Thread(target=self.web_server.run_forever(), args=())
-#		web_server_thread.daemon = True
-#		web_server_thread.start() 
+# web Server
+# web_server_thread = threading.Thread(target=self.web_server.run_forever(), args=())
+# web_server_thread.daemon = True
+# web_server_thread.start()
 
 	def _run_applications_server(self, server_port):
+		"""
+		Start a client server. The client server will serve every clients' requests.
+		Core class: ApplicationToWieraHandler.
+		Services:
+			startInstances(self, policy):
+			stopInstances(self, key):
+			getInstances(self, key):
+			getLocalServerList(self):
+		"""
 		# set handler to our implementation
 		handler = ApplicationToWieraHandler(self)
-  
+
 		processor = ApplicationToWieraIface.Processor(handler)
 		transport = TSocket.TServerSocket(port=server_port)
 		tfactory = TTransport.TFramedTransportFactory()
 		pfactory = TBinaryProtocol.TBinaryProtocolFactory()
-  
-		# set server
+
 		server = TServer.TThreadPoolServer(processor, transport, tfactory, pfactory, daemon=True)
-  
 		print '[Wiera] Starting applications server port:' + str(server_port)
 		server.serve()
 
@@ -237,6 +281,17 @@ class WieraServer:
 		return available_hostname_list
 
 	def startInstances(self, policy_spec):
+		"""
+		Translate this policy specified by clients.
+			:wieraID.
+			:e.g
+
+		Start the policy
+
+
+		:param policy_spec:
+		:return:
+		"""
 		start = time.time()
 		result = {}
 			
@@ -259,8 +314,7 @@ class WieraServer:
 
 		if policy_found != None:
 			server_list = policy_found.get_connected_instances()
-			req = json.dumps({'type':'stop_instance',
-                                'policy_id': policy_id,})
+			req = json.dumps({'type':'stop_instance', 'policy_id': policy_id,})
 
 			for local_server in server_list:
 				hostname = local_server[0]
@@ -336,13 +390,17 @@ class WieraServer:
 		return commands.getoutput("/sbin/ifconfig").split("\n")[1].split()[1    ][5:]
 
 	def run_forever(self):
-		#run Local Server manager
+		"""
+		Start local server manager to listen registration from local servers.
+		:return:
+		"""
+		# run Local Server manager
 		ping_thread = threading.Thread(target=self.local_server_manager.run_forever(), args=())
 		ping_thread.daemon = True
 		ping_thread.start()
-		#run Policy (Local Instance) manager
+		# run Policy (Local Instance) manager
 		ping_thread.join()
-#		web_server_thread.join()
+		# web_server_thread.join()
 
 	def get_cost_info():
 		#store

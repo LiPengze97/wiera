@@ -1,5 +1,7 @@
 import ConfigParser
 import wieraCommon
+from ConfigParser import NoOptionError
+
 
 class Conf:
 	conf = {}
@@ -15,13 +17,16 @@ class Conf:
 	def __init__(self, file_path):
 		Config = ConfigParser.ConfigParser()
 		Config.read(file_path)
-	
 		self.conf['local_server_port'] = int(Config.get('wiera', 'local_server_port'))
 		self.conf['applications_port'] = int(Config.get('wiera', 'applications_port'))
 		self.conf['ping_interval'] = int(Config.get('wiera', 'ping_interval'))
+		try:
+			self.conf['wiera_central_server_ip'] = str(Config.get('wiera', 'wiera_central_server_ip'))
+		except NoOptionError:
+			self.conf['wiera_central_server_ip'] = wieraCommon.get_public_ip()
 		self.conf['ui_command'] = self.true_false(Config.get('etc', 'ui_command'))
 
-		#check data type
+		# check data type
 		self.conf['int_value'] = []
 		self.conf['float_value'] = []
 		self.conf['bool_value'] = []
@@ -35,6 +40,7 @@ class Conf:
 				self.conf['float_value'].append(_con)
 			elif con_type is bool:
 				self.conf['bool_value'].append(_con)
+
 	def get(self, key):
 		return self.conf[key]
 

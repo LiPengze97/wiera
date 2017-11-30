@@ -103,7 +103,7 @@ public class MetadataStore {
 	public void deleteObject(String key) {
 		m_objectPIndex.delete(key);
 	}
-/*
+
 	public Map<MetaObjectInfo, Vector<Integer>> searchDirtyObject(Locale targetLocale) {
 		Map<MetaObjectInfo, Vector<Integer>> keyList = new HashMap<>();
 
@@ -232,7 +232,7 @@ public class MetadataStore {
 
 		return keyList;
 	}
-*/
+
 	public Map<MetaObjectInfo, Vector<Integer>> getWithTags(String strTag) {
 		Map<MetaObjectInfo, Vector<Integer>> keyList = new HashMap<>();
 		EntityCursor<MetaObjectInfo> entityCursor = m_objectSIndexTags.subIndex(strTag).entities();

@@ -1,0 +1,8 @@
+Why cannot use the Global lock in quorum?
+1. Only the instance that requested the data will require the lock. It is meaningless.
+
+
+2. Event name may fake, see Event.java
+
+
+3. byte decode

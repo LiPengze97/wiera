@@ -53,15 +53,52 @@ public class LocalServer {
 	//http://curator.apache.org/curator-framework/
 	private static CuratorFramework m_zkClient;
 
-	public LocalServer(String strWieraIP, int nWieraPort, String strZKServerIP) {
+	/*
+	*Nan: Because one computer may have more than one network interface card.
+	*the developer can specify the interface card he/she wants to use by providing the selfIP
+	*This is important when we using Wiera in a LAN. Using http://checkip.amazonaws.com to check IP is not acceptable.
+	* */
+
+	/**
+	 * Initialize parameters
+	 * Get a client object that is served by the Wiera central server.
+	 * Generate a server for the Wiera central server.
+	 * Parameters
+	 * 1. m_lWieraPort: The Port that the Wiera central server listens for local instances.
+	 * 2. m_strWieraIP: The IP address of the Wiera central server.
+	 * 3. m_strZKServerIP
+	 * 4. m_strExternalIP: the IP address of this machine.
+	 * 5. m_instanceList: all the launched instance. It is empty initially.
+	 *
+	 * 6. m_wieraClient: a LocalServerToWieraIface.Client object, which is a client of the Wiera central server
+	 * 		Services:
+	 *		1). registerLocalServer(String ); // Telling the central server its IP, Port, and hostname (machine name if you are in a LAN)
+	 *
+	 *
+	 * 7. m_localServer: a TServer (Core class: WieraToLocalServerInterface) object that provides service for Wiera Central Server []
+	 * 		Serivces:
+	 * 		1). ping
+	 * 		2). startInstance, a wieraID used to distinguish different local instances,
+	 * 						   a nInstanceCnt indicates how many local instances this Wiera has. (if just one instance, it will run as standalone mode)
+	 * 						   a policy file specified the rules.
+	 * 		3).	stopInstance, a wieraID used to identify the running local instance.
+	 *
+	 * 8. m_zkClient ?????
+	 *
+	 * */
+
+	public LocalServer(String strWieraIP, int nWieraPort, String strZKServerIP, String selfIP) {
 		long lRetryTime = 1;
 		m_lWieraPort = nWieraPort;
 		m_strWieraIP = strWieraIP;
 		m_strZKServerIP = strZKServerIP;
-
+		m_strExternalIP = selfIP;
 		m_instanceList = new HashMap<String, LaunchLocalInstance>();
 
 		while (true) {
+			/*
+			* If failing to connect to the Wiera Central Server, this will retry and increase the time gap gradually.
+			* */
 			m_wieraClient = initWieraClient();
 
 			if (m_wieraClient != null) {
@@ -122,6 +159,7 @@ public class LocalServer {
 		localServerInfo.put(IP_ADDRESS, getExternalIP());
 		localServerInfo.put(LOCAL_SERVER_PORT, getLocalServerPort());
 		localServerInfo.put(HOSTNAME, getHostName());
+		System.out.println("Local server info: " + localServerInfo.toString());
 		try {
 
 			m_wieraClient.registerLocalServer(localServerInfo.toString());
@@ -129,6 +167,10 @@ public class LocalServer {
 			System.out.println(localServerInfo.toString());
 			e.printStackTrace();
 		}
+	}
+
+	public LocalServer(String strWieraIP, int nWieraPort, String strZKServerIP){
+		this(strWieraIP, nWieraPort, strZKServerIP, getExternalIP());
 	}
 
 	long getLocalServerPort() {
@@ -154,15 +196,18 @@ public class LocalServer {
 
 		return client;
 	}
-
+	/**
+	 * Run the local server based on WieraToLocalServerInterface class.
+	 * Listening the commands from Wiera central server.
+	 * Commands include: ping, startInstance, stopInstance.
+	 * */
 	public void runForever() {
 		System.out.format("LocalInstance Server now waiting requests from Wiera: %d\n", getLocalServerPort());
 		m_localServer.serve();
 	}
 
 	public static String getExternalIP() {
-		// Nan : hard code for testing
-		m_strExternalIP="127.0.0.1";
+
 		if (m_strExternalIP == null) {
 			try {
 				URL url = new URL("http://checkip.amazonaws.com");
@@ -210,8 +255,9 @@ public class LocalServer {
 		return m_strHostName;
 	}
 
-	//Will be called by ThriftInterface
-	///////////////////////////////////////////////
+	/**
+	 * Called by the Wiera Central server via thrift to check whether the local server is alive, not a instance.
+	 */
 	public String pingFromWiera() {
 		JSONObject response = new JSONObject();
 		response.put(RESULT, true);
@@ -219,7 +265,14 @@ public class LocalServer {
 
 		return response.toString();
 	}
-
+	/**
+	 * Called by the Wiera Central server via thrift to create new local instance.
+	 * Create a new thread to run this new instance.
+	 * A single local server can hold multiple instances. But it can only have one instance for a specific Wiera group.
+	 * What is a Wiera group:
+	 * 	Each server can have multiple instances. These instances may belong to different applications. So a Wiera group means that
+	 * 	a group of local instances that belong to the same application. We use wieraID to distinguish and identify groups.
+	 * */
 	public String startInstance(JSONObject policy) {
 		JSONObject response = new JSONObject();
 
@@ -227,7 +280,7 @@ public class LocalServer {
     	String strWieraID = policy.getString(ID);
     	int nInstanceCnt = policy.getInt(INSTANCE_CNT);
 		//nInstanceCnt
-        if (strWieraID == null || strWieraID.length() == 0) {
+        if (strWieraID == null || strWieraID.length() == 0){
 			response.put(RESULT, false);
 			response.put(VALUE, "Failed to getObject policy id from policy"); //Maybe LocalInstance info?
 		} else {
@@ -235,7 +288,7 @@ public class LocalServer {
 			Thread newLocalInstance = (new Thread(instanceLauncher));
 			newLocalInstance.start();
 
-			//Single server can have multiple instance
+			//Nan: a single local server can have multiple instances. But it can only have one instance for a specific Wiera group.
 			m_instanceList.put(strWieraID, instanceLauncher);
 
 			response.put(RESULT, true);
@@ -244,7 +297,9 @@ public class LocalServer {
 
 		return response.toString();
 	}
-
+	/**
+	 * Called by the Wiera Central server via thrift to stop a local instance.
+	 */
 	public String stopInstance(JSONObject policy) {
 		JSONObject response = new JSONObject();
 		response.put(RESULT, true);
@@ -269,7 +324,6 @@ public class LocalServer {
 			//Remove Wiera ID from the list
 			m_instanceList.remove(strWieraID);
 		}
-
 		return response.toString();
 	}
 	//End of thrift callback functions
@@ -292,6 +346,9 @@ public class LocalServer {
 		input.setRequired(false);
 		options.addOption(port);
 
+		Option selfIP = new Option("e", "externalIP", true, "the interface IP wanted to use");
+		input.setRequired(false);
+		options.addOption(selfIP);
 		CommandLineParser parser = new DefaultParser();
 		HelpFormatter formatter = new HelpFormatter();
 		CommandLine cmd;
@@ -309,26 +366,32 @@ public class LocalServer {
 
 	//Main function
 	public static void main(String[] args) throws NoSuchFieldException, IOException {
-		//Check standalone or not for later.
-		//Now it should use Wiera
+		/*
+		Check standalone or not for later.
+		-w run with Wiera central server.
+		-p the listening port of Wiera central server.
+		-e an IP address that indicates which interface is going to use.
+		*/
 		CommandLine cmd = checkParams(args);
 		if (cmd == null) {
 			return;
 		}
 
 		int nWieraPort = WIERA_PORT_FOR_LOCAL_SERVER;
+		final LocalServer localServer;
 
-		//Check whether LocalInstance needs to connect to Wiera
 		if (cmd.hasOption('w') == true) {
 		    if(cmd.hasOption('p') == true) {
                 nWieraPort = Integer.parseInt(cmd.getOptionValue("p"));
             }
-
-            //Running LocalServer for running multiple instances
-			final LocalServer localServer = new LocalServer(cmd.getOptionValue("w"), nWieraPort, cmd.getOptionValue("w"));
+			if(cmd.hasOption('e') == true){
+				localServer = new LocalServer(cmd.getOptionValue("w"), nWieraPort, cmd.getOptionValue("w"), cmd.getOptionValue("e"));
+			}else {
+				//Running LocalServer for running multiple instances
+				localServer = new LocalServer(cmd.getOptionValue("w"), nWieraPort, cmd.getOptionValue("w"));
+			}
 			runLocalServer(localServer);
-		} else //Running LocalInstance without Wiera
-		{
+		}else{
 			String strPolicyPath = "policy_example/low_latency.json";
 			int nPort = 55556;
 
@@ -367,7 +430,11 @@ public class LocalServer {
 	}
 
 	static void runLocalServer(final LocalServer localServer) {
-		//For getting input for LocalInstance Server
+		/*
+		The important function for running Wiera with a central server.
+		1. Start a new thread for running a simple CLI tool.
+		2. Start this local server .runForever()
+		 */
 		(new Thread(new Runnable() {
 			@Override
 			public void run() {

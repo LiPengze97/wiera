@@ -13,6 +13,9 @@ import java.util.Map;
 import static umn.dcsg.wieralocalserver.Constants.*;
 
 /**
+ * Bugs:
+ *  1. Some
+ *
  * Created by Kwangsung on 7/26/2017.
  */
 public class BroadcastResponse extends Response {

@@ -11,6 +11,18 @@ import java.util.Vector;
 import static umn.dcsg.wieralocalserver.Constants.*;
 
 /**
+ * Nan:
+ * Search key returns part of keys that satisfied a requirement in a locale.
+ * searchkey(all, hostname:tiername) will only return the key if the tiername has the latest version of the key.
+ * For example, aws-us-east has two locales, disk and ssd.
+ *      The disk has key=abc, version = [1,2,3], ver3-value = "....".
+ *      The ssd  has key=abc, version = [1,2,3,4], ver4-value = "weeee"
+ *  When we query(all, "aws-us-east:disk"), the key=abc will not be returned since it do not have the latest version.
+ *  initPara:
+ *  in-param:
+ *
+ *
+ *
  * Created by with IntelliJ IDEA.
  * User: Kwangsung
  * Date: 9/11/2017 10:46 AM
@@ -81,7 +93,7 @@ public class SearchKeysResponse extends Response {
 
     @Override
     public boolean respond(Map<String, Object> responseParams) {
-        boolean bRet = true;/*
+        boolean bRet = true;
         try {
             QUERY_TYPE_SUPPORTED queryType = (QUERY_TYPE_SUPPORTED) responseParams.get(QUERY_TYPE);
             Map<MetaObjectInfo, Vector<Integer>> keys = null;
@@ -118,7 +130,7 @@ public class SearchKeysResponse extends Response {
 
         } catch (Exception e) {
             e.printStackTrace();
-        }*/
+        }
 
         return false;
     }

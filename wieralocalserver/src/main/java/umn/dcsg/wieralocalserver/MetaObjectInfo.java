@@ -53,7 +53,7 @@ public class MetaObjectInfo {
         m_strHostname = strHostName;
 
 
-        if(m_bSupportVersioning == true){
+        if(m_bSupportVersioning == false){
             m_nLatestVer = NO_VERSIONING_SUPPORT;
             m_latestMetaInfo = new MetaVerInfo(m_nLatestVer, strHostName,  startTime, size);
         }else{
@@ -342,9 +342,15 @@ public class MetaObjectInfo {
         return info.getLocale(strHostName, strTierName);
     }
 
-    //Nan:
+    // Nan: For compatibility.
+    // The strTiername may be a tier name or a local id , e.g. "hostname:tiername"
     public synchronized boolean hasLocale(String strTierName){
-        return hasLocale(m_nLatestVer, strTierName);
+        String [] temp = strTierName.split(":");
+        if(temp.length == 1){
+            return hasLocale(m_nLatestVer, strTierName);
+        }else{
+            return hasLocale(m_nLatestVer, temp[0], temp[1]);
+        }
     }
     //Nan:
     public synchronized boolean hasLocale(long lVer, String strTierName){
@@ -352,13 +358,14 @@ public class MetaObjectInfo {
     }
     //Nan:
     public synchronized boolean hasLocale(long lVer, String strHostName, String strTierName) {
-        MetaVerInfo info;
+        MetaVerInfo info = null;
         boolean rs = false;
         if (m_bSupportVersioning == true) {
             if (lVer < 0) {
                return rs;
             }else{
-                info = m_versions.get(lVer);
+                info = m_versions.get((int)lVer);
+                System.out.println(m_versions);
             }
         } else {
             info = m_latestMetaInfo;

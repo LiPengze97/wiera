@@ -45,6 +45,39 @@ import org.json.*;
  *      2. Provide services for wiera central, client, peers, and also have peer-client
  *      3. Manage Event and response
  *      4. Storage Tiers
+ * Thrift Servers and Client
+ * 1. Client
+ *      A list of peer clients
+ *          Service:
+ *      A client of the Wiera central server
+ *          Service:
+ * 2. Servers:
+ *      A server for peers:
+ *          Service: [via LocalInstanceToPeerInterface]
+ *              ping()
+ *              // arguments are a json string.
+ *              forwardPutRequest(strPutReq) -> localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(value)) -> trigger PUT event
+ *              put(strReq) -> localInstance.put(strKey, nVer, value, strTiername)
+ *              get(strReq) -> localInstance.get(strKey, nVer, strTierName)
+ *              getLatestVersion(strKey) -> localInstance.getLatestVersion(strKey)
+ *              getClusterLock(strLockReq)
+ *              releaseClusterLock(strLockReq)
+ *
+ public java.lang.String setLeader(java.lang.String strLeaderHostnameReq) throws org.apache.thrift.TException;
+ *      A server for applications:
+ *          Services: [via ApplicationToLocalInstanceInterface]
+ *              put(key, value) -> trigger PUT events
+ *              update(key, version, value) [not implemented]
+ *              get(key) -> trigger GET events
+ *              getVersion(key,version) // get a specific version value of a key. -> localInstance.get(key, nVersion)
+ *              getVersionList(key) -> localInstance.getVersionList(key)
+ *              remove(key) -> localInstance.delete(key, MetaObjectInfo.LATEST_VERSION)
+ *              removeVersion(key, version) -> localInstance.delete(key, nVersion)
+ *      A server for Wiera central server:
+ *          Service:
+ *
+ *
+ *
  *
  *
  * */
@@ -71,6 +104,8 @@ public class LocalInstance {
     public Key encryptionKey = null;
 
     // We will start listening for client putObject/getObject on this port
+    // Nan: Each local server may hold several instances for different clients (applications)
+    // So each application would require a port.
     final private int defaultPort = 55555;
     private int m_nServerPortForApplication = defaultPort;
     private int m_nServerPortForWiera = 0;
@@ -299,7 +334,7 @@ public class LocalInstance {
 
         //55555 is preferred for Application Server
         try {
-            socket = new TServerSocket(m_nServerPortForApplication); //random port for client.
+            socket = new TServerSocket(m_nServerPortForApplication); //random port for client
         } catch (Exception e) {
             //already taken
             socket = null;
@@ -519,7 +554,15 @@ public class LocalInstance {
 
     ///////////////////// Start this instance, called by caller /////////////////////
 
-
+    /**
+     * Create a new thread for running the TServer for this application.
+     * Create a new thread for running the TServer for the central server.
+     * Using LocalInstanceToWiera.Client to
+     *        Tell the central server that the instance is created and running.
+     * If using redis, create a new thread for running the TServer for Redis. ?????
+     * PeerServer thread are create above, we join PeerServer's thread here.
+     *
+     * */
     public void runForever(JSONObject policy) {
         //Start services for applications (clients)
         Thread applicationServerThread = new Thread(new Runnable() {
@@ -901,6 +944,47 @@ public class LocalInstance {
         return ret;
     }
 
+    public void writeLock(String strKey){
+        ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
+        lock.writeLock().lock();
+    }
+    public void readLock(String strKey){
+        ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
+        lock.readLock().lock();
+    }
+    public void writeReleaseLock(String strKey){
+        ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
+        lock.writeLock().unlock();
+    }
+    public void readReleaseLock(String strKey){
+        ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
+        lock.readLock().unlock();
+    }
+    /**
+     * Nan:
+     *  May be removed later.
+     *  Separate lock's acquiring and releasing from the get
+     *  Used by Peer
+     * */
+    /*
+    public MetaObjectInfo putUnlock(String strKey, int nVer, byte [] value, String strTierName){
+
+        MetaObjectInfo obj = null;
+
+            if (putInternal(strKey, nVer, value, strTierName) == true) {
+                obj = getMetadata(strKey);
+                if(obj != null){
+                    obj.updateVersion(nVer, LocalServer.getHostName(), strTierName, m_tiers.getTierType(strTierName), System.currentTimeMillis(), value.length);
+                }else{
+                    obj = new MetaObjectInfo(nVer, strKey, LocalServer.getHostName(), strTierName, m_tiers.getTierType(strTierName), System.currentTimeMillis(), value.length, "", m_bVersioningSupport);
+                }
+                commitMetadata(obj);
+            }
+
+        return obj;
+    }
+*/
+
     public MetaObjectInfo put(String strKey, int nVer, byte [] value, String strTierName){
         ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
         MetaObjectInfo obj = null;
@@ -955,6 +1039,32 @@ public class LocalInstance {
 
         return ret;
     }
+    /**
+     * Nan:
+     *  May be removed later.
+     *  Separate lock's acquiring and releasing from the get
+     *  Used by Peer
+     * */
+    /*
+    public byte[] getUnlock(String strKey, int nVer, String strTierName){
+
+        MetaObjectInfo obj = null;
+        byte [] value;
+
+
+            value = getInternal(strKey, nVer,strTierName);
+            if (value != null){
+                obj = getMetadata(strKey);
+                if(obj != null){
+                    // obj update access time ....
+                }else{
+                    System.out.println("[Error] Inconsistent metadata.");
+                    System.exit(1);
+                }
+            }
+
+        return value;
+    }*/
 
     public byte[] get(String strKey, int nVer, String strTierName){
         ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
@@ -1030,7 +1140,11 @@ public class LocalInstance {
         return put(strKey, nVer, value, m_strDefaultTierName);
     }
     public MetaObjectInfo put(String strKey,  byte [] value, String strTiername){
-        return put(strKey, getLatestVersion(strKey) + 1, value, m_strDefaultTierName);
+        if(isVersionSupported()){
+            return put(strKey, getLatestVersion(strKey) + 1, value, m_strDefaultTierName);
+        }else{
+            return put(strKey, getLatestVersion(strKey) + 1, value, m_strDefaultTierName);
+        }
     }
 
     //////////////////////Contains key ///////////////////////
@@ -1059,7 +1173,9 @@ public class LocalInstance {
         }
     }
     // Kwangsung
-    //Data may not be stored in local
+    // Data may not be stored in local
+    // Nan
+    // Method used by MoveResponse
     public Locale getLocaleWithID(String strLocaleID) {
         String strHostName = strLocaleID.split(":")[0];
         String strTierName;

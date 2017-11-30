@@ -17,6 +17,16 @@ import static umn.dcsg.wieralocalserver.Constants.*;
  * Date: 28/03/13
  * Time: 11:07 PM
  * To change this template use File | Settings | File Templates.
+ *
+ * Nan: Bugs:
+ *  1. In some case, the m_strRelatedEventType is the response class name, but not event name or event type.
+ *  For example, we use
+ *      responseConstructor.newInstance(localInstance, responseClass.getName(), responseParams)
+ *  to dynamically create a response. The second parameter is the name of the class.
+ *  However, it seems that we never used this attribute. So there is no runtime bug.
+ *
+ *
+ *
  */
 
 // A response only needs to know how to respond
@@ -63,7 +73,7 @@ public abstract class Response {
         return true;
     }
 
-    //The responseparams will contain RESULT (boolean) and
+    //The response params will contain RESULT (boolean) and
     //VALUE if response success
     //REASON if response failed
 
@@ -129,16 +139,20 @@ public abstract class Response {
 
     //This is the final function for responding
     public static boolean respondAtRuntimeWithInstance(LocalInstance localInstance, Response response, Map<String, Object> responseParams) {
-        boolean bRet;
+        boolean bRet = false;
         Latency latency;
-
-        //Set timer
-        OperationLatency operationLatency = (OperationLatency) responseParams.get(OPERATION_LATENCY);
-        latency = operationLatency.addTimer(response.getClass().getSimpleName());
-        latency.start();
-        bRet = response.respond(responseParams);
-        latency.stop();
-
+        /*
+        * Nan:
+        * Add this checking. Before this modification, responses triggered by this method never check params. e.g. MultiplePrimaries
+        * */
+        if (response.doCheckResponseParams(responseParams.keySet()) == true) {
+            //Set timer
+            OperationLatency operationLatency = (OperationLatency) responseParams.get(OPERATION_LATENCY);
+            latency = operationLatency.addTimer(response.getClass().getSimpleName());
+            latency.start();
+            bRet = response.respond(responseParams);
+            latency.stop();
+        }
         responseParams.put(RESULT, bRet);
         return bRet;
     }

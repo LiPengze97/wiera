@@ -136,8 +136,8 @@ public abstract class Event implements Serializable {
             boolean bRet;
 
             for (Response response : m_lstResponse) {
-                //Check reponse can support the event
-                //Each reponse will have a change to make params here
+                //Check response can support the event
+                //Each response will have a change to make params here
                 response.doPrepareResponseParams(responseParams);
 
                 if (response.doCheckResponseParams(responseParams.keySet()) == true) {

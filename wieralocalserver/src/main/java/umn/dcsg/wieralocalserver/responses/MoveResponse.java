@@ -13,6 +13,14 @@ import umn.dcsg.wieralocalserver.MetaObjectInfo;
 import static umn.dcsg.wieralocalserver.Constants.*;
 
 /**
+ * In-Params:
+ * 		KEY_LIST:FROM:TO:RATE[:]
+ *
+ *
+ * 	Move a bundle of key-value pairs from one locale to another locale.
+ * 	For now, assume the source and destination are local.
+ *
+ * 	Future, 
  * Created by ajay on 7/13/13.
  */
 public class MoveResponse extends Response {
@@ -31,8 +39,10 @@ public class MoveResponse extends Response {
 	//Need to check this works.
 	@Override
 	public boolean respond(Map<String, Object> responseParams) {
-		boolean bRet = true;
+		return false;
 		/*
+		boolean bRet = true;
+
 		//Locale (from) : MetaObject : versions
 		HashMap<Locale, Map<MetaObjectInfo, Vector<Integer>>> keyList = (HashMap<Locale, Map<MetaObjectInfo, Vector<Integer>>>) responseParams.get(KEY_LIST);
 		Locale fromLocale = m_localInstance.getLocaleWithID((String) responseParams.get(FROM));
@@ -149,8 +159,8 @@ public class MoveResponse extends Response {
 		}
 
 		//Put the reason
-		responseParams.put(REASON, strReason);*/
-		return bRet;
+		responseParams.put(REASON, strReason);
+		return bRet;*/
 	}
 
 	@Override

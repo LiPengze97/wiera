@@ -3,6 +3,7 @@ package umn.dcsg.wieralocalserver.client;
 //import com.backblaze.erasure.ReedSolomon;
 import com.amazonaws.services.dynamodbv2.xspec.NULL;
 import com.google.common.primitives.Bytes;
+import com.sleepycat.je.tree.IN;
 import org.apache.commons.cli.*;
 import org.apache.commons.math3.distribution.TDistribution;
 import org.apache.commons.math3.exception.MathIllegalArgumentException;
@@ -141,7 +142,16 @@ public class WieraClientCLI {
                         try {
                             boolean rs = w_centralC.startPolicy(strPolicyPath);
                             if (rs == true) {
-                                w_centralC.printLocalStorageInstances();
+                                //w_centralC.printLocalStorageInstances();
+                                // This may cause returning partial instances.
+                                // It takes some times for the central server to create new instance.
+                                // we need to wait for some times.
+                                try{
+                                    Thread.sleep(2000);
+                                    w_centralC.printLocalStorageInstances();
+                                }catch (InterruptedException e){
+                                    System.out.println("Client is interrupted!\nBye.");
+                                }
                             } else {
                                 System.out.println("[debug] Failed to start policy.");
                             }
@@ -159,7 +169,7 @@ public class WieraClientCLI {
                             if(tokens.length  == 1){
                                 instance = w_centralC.getDefaultLocalStorageInstance();
                             }else if(tokens.length == 2){
-                                instance = w_centralC.getLocalStorageInstances(tokens[1]);
+                                instance = w_centralC.getLocalStorageInstance(tokens[1]);
                             }else{
                                 System.out.println("[Input Error] Please supply at most one argument.");
                                 continue;
@@ -168,7 +178,7 @@ public class WieraClientCLI {
                             String strLocalInstanceIP = (String) instance.get(1);
                             int nLocalInstancePort = (int) instance.get(2);
 
-                            w_localInstanceC = w_centralC.getLocalInstance(strWieraIPAddress, nLocalInstancePort);
+                            w_localInstanceC = w_centralC.getLocalInstance(strLocalInstanceIP, nLocalInstancePort);
                             System.out.println("[Log] Successfully connect to "+ strHostName);
                         }else{
                             System.out.println("[Error] Please first setup policy");

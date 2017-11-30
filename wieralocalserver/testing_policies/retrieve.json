@@ -1,0 +1,55 @@
+{
+  "id": "searchkeys_response",
+  "host_list": {
+    "dell": {
+      "storage_tiers": [
+        {
+          "tier_name": "disk-1",
+          "tier_size": "2KB",
+          "tier_type": 2,
+          "tier_location": "disk-1-dir",
+          "tier_expected_latency": 10,
+          "default": true
+        }
+      ],
+      "events": [
+        {
+          "event_type": "ActionPut",
+          "event_trigger": [
+            "ActionPut"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "Store",
+              "response_parameters": {
+                "to": ":disk-1"
+              }
+            },
+            {
+              "response_type":"Debug",
+              "response_parameters":{
+                "debugID":"3"
+              }
+            }
+          ]
+        },
+        {
+          "event_type": "ActionGet",
+          "event_trigger": [
+            "ActionGet"
+          ],
+          "event_conditions": {},
+          "responses": [
+            {
+              "response_type": "Retrieve",
+              "response_parameters": {
+                "from": ":disk-1"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

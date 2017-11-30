@@ -7,6 +7,16 @@ import static umn.dcsg.wieralocalserver.Constants.*;
 import java.util.Map;
 
 /**
+ * Nan:
+ *  For now, only support retrieve from local instance, no remote instance is considered.
+ *  If no "from" is provided, the default target_locale is local instance's default tier. [The tier set as default in policy].
+ *  If no version is provide, return the latest version
+ *  initParam
+ *  in-params:Key[:From:Version]
+ *
+ *  out-param:Key:Version:Value:Target_Locale:[:From]
+ *
+ *
  * Created by ajay on 11/13/12.
  */
 public class RetrieveResponse extends Response {
@@ -27,10 +37,25 @@ public class RetrieveResponse extends Response {
 
         String strKey = (String) responseParams.get(KEY);
         Locale targetLocale = (Locale) responseParams.get(TARGET_LOCALE);
+        int nVer = MetaObjectInfo.NO_SUCH_VERSION;
+        if(m_localInstance.isVersionSupported()){
+            if (responseParams.containsKey(VERSION) == true){
+                nVer = (int)(double) responseParams.get(VERSION);
+            } else if (m_initParams.containsKey(VERSION) == true) {
+                nVer= (int)(double) m_initParams.get(VERSION);
+            }else{
+                nVer = m_localInstance.getLatestVersion(strKey);
+                if(nVer == MetaObjectInfo.NO_SUCH_KEY){
+                    responseParams.put(RESULT, false);
+                    responseParams.put(REASON, "Not found this key-value pair");
+                    return false;
+                }
+            }
+        }
 
         //For TripS Case
         if (targetLocale.isLocalLocale()) {
-            value = m_localInstance.get(strKey, targetLocale.getTierName());
+            value = m_localInstance.get(strKey, nVer, targetLocale.getTierName());
         } else {
             //Forward request
             value = null;
@@ -42,7 +67,7 @@ public class RetrieveResponse extends Response {
         } else {
             bRet = true;
             responseParams.put(VALUE, value);
-
+            responseParams.put(VERSION,nVer);
             //To update end of response chain
             addObjsToUpdate(m_localInstance.getMetadata(strKey), responseParams);
         }
@@ -93,5 +118,8 @@ public class RetrieveResponse extends Response {
 
         targetLocale = new Locale(strHostName, strTierName, tierType);
         responseParams.put(TARGET_LOCALE, targetLocale);
+
+
+
     }
 }

@@ -17,7 +17,13 @@ import java.util.concurrent.LinkedBlockingQueue;
 import static umn.dcsg.wieralocalserver.Constants.*;
 
 /**
- * This class is for distributing update to other LocalInstance instances in the background and used for responses.
+ * This class is for distributing (broadcast) update to other LocalInstance instances in the background and used for responses.
+ * Nan:
+ *  Worked in a consumer-producer style, consumer "lazyUpdate" runs in another thread to broadcast key-value pairs to other instances.
+ *  By calling putToQueue, we supply the key-value pairs.
+ *      List<Locale> targetList -> Not used
+ *      Map<String, Object> params -> must has key:version:tier_name[:value]
+ *
  *
  * @author Kwangsung Oh
  */
@@ -76,7 +82,7 @@ public class LazyUpdateManager {
     private void lazyUpdate() {
         long lastModifiedTime = 0;
         Map<String, Object> responseParams;
-       /* while (true) {
+        while (true) {
             try {
                 responseParams = m_queue.take();
 
@@ -97,6 +103,11 @@ public class LazyUpdateManager {
                     if(responseParams.containsKey(VALUE) == true) {
                         value = (byte[])responseParams.get(VALUE);
                     } else {
+
+                        //Nan: If no value is supplied, then ask the localInstance to find the value.
+                        value = m_localInstance.getInternal(strKey, (int)responseParams.get(VERSION), (String)responseParams.get(TIER_NAME));
+                        responseParams.put(VALUE, value);
+                        /*
                         MetaObjectInfo obj = m_localInstance.getMetadata(strKey);
 
                         //If metadata is not updated yet.
@@ -109,10 +120,10 @@ public class LazyUpdateManager {
                                 }
                             }
                         }
-
                         if(obj != null) {
-                            value = m_localInstance.getInternal(obj.getVersionedKey((int)responseParams.get(VERSION)), (String)responseParams.get(TIER_NAME));
-                        }
+                            //value = m_localInstance.getInternal( obj.getVersionedKey(  (int)responseParams.get(VERSION)  ) ,     (String)responseParams.get(TIER_NAME) );
+                            value = m_localInstance.getInternal(obj.get(int)responseParams.get(VERSION)  ) ,     (String)responseParams.get(TIER_NAME) )
+                        }*/
                     }
 
                     if (value == null) {
@@ -134,7 +145,7 @@ public class LazyUpdateManager {
             } catch (InterruptedException e) {
                 e.printStackTrace();
             }
-        }*/
+        }
     }
 
     public boolean putToQueue(List<Locale> targetList, Map<String, Object> params) {//String strKey, int nVer, byte[] value, String strTierName, String strTag, OperationLatency operationLatency) {

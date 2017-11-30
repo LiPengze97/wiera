@@ -169,7 +169,7 @@ public class WieraCentralClient {
      * @return An array that stores the info about this instance; null if the instance is not found.
      *
      * */
-    public JSONArray getLocalStorageInstances(String hostname) {
+    public JSONArray getLocalStorageInstance(String hostname) {
         if(wieraLocalInstancesList != null){
             JSONArray instance;
             for(int i = 0; i < wieraLocalInstancesList.length(); i++){
@@ -207,10 +207,10 @@ public class WieraCentralClient {
      *
      * */
     public void printLocalStorageInstances(){
-        if(wieraLocalInstancesList == null){
+       // if(wieraLocalInstancesList == null){
             getLocalStorageInstances();
-        }
-        if(wieraLocalInstancesList != null){
+       // }
+       // if(wieraLocalInstancesList != null){
             System.out.println("------------------------  Instance List  ------------------------");
             int len = wieraLocalInstancesList.length();
             for (int i = 0; i < len; i++) {
@@ -218,9 +218,9 @@ public class WieraCentralClient {
                 System.out.format("Hostname: %s, IP: %s, Port: %d\n", instance.get(0), instance.get(1), instance.get(2));
             }
         
-        }else{
-            System.out.println("[debug] ");
-        }
+       // }else{
+       //     System.out.println("[debug] ");
+       // }
     }
     /**
      * Start a <i href="">policy file</i> and launch corresponding local instances.
@@ -246,10 +246,11 @@ public class WieraCentralClient {
 
                 if (bResult == true) {
                     try {
-                        Thread.sleep(3000);
+                        Thread.sleep(1000);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
+                    // WieraID　is just policy ID
                     strWieraID = (String) res.get(VALUE);
                     setpolicy = true;
                     return true;

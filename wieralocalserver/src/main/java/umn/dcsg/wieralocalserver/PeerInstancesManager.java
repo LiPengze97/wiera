@@ -115,7 +115,13 @@ public class PeerInstancesManager {
 
         return null;
     }
-
+    public List<Client> getAllPeerClient(){
+        List <Client> rs = new LinkedList<>();
+        for (Map.Entry<String, ThriftClientPool> entry : m_peersList.entrySet()) {
+            rs.add((Client)entry.getValue().getClient());
+        }
+        return rs;
+    }
     public void releasePeerClient(String strHostName, Client peerClient) {
         ThriftClientPool info = m_peersList.get(strHostName);
 

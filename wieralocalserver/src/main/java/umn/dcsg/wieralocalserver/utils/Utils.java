@@ -213,4 +213,17 @@ public class Utils {
 
 		return percentile.evaluate(lPercentile);
 	}
+
+
+	public static String encodeBytes(byte [] bytes){
+		byte[] temp = Base64.getEncoder().encode(bytes);
+		String base64String = new String(temp);
+		return base64String;
+
+	}
+	public static byte [] decodeBytes(String data){
+		byte[] backToBytes = Base64.getDecoder().decode(data);
+		return backToBytes;
+
+	}
 }

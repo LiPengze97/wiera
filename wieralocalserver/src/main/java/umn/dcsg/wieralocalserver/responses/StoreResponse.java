@@ -14,6 +14,18 @@ import static umn.dcsg.wieralocalserver.Constants.*;
 import static umn.dcsg.wieralocalserver.MetaObjectInfo.NO_SUCH_VERSION;
 
 /**
+ * Nan:
+ * Data source preference order: params(dynamic) > initParam (static) > default
+ * Default version number is the existed latest version plus one if versioning is enabled.
+ * Default version number is NO_SUCH_VERSION is  versioning is disabled.
+ *
+ *  initParam
+ *  in-Param:Key:Value:To[:Version]
+ *
+ *  Out-param:Key:Value:To:Target_locale:Version:last_modified_time:reason:result[:tag]
+ *
+ *
+ *
  * Created by ajay on 11/13/12.
  */
 public class StoreResponse extends Response {
@@ -39,17 +51,33 @@ public class StoreResponse extends Response {
         MetaObjectInfo obj;
 
         try {
+            //necessary
             String strKey = (String) responseParams.get(KEY);
             byte[] value = (byte[]) responseParams.get(VALUE);
             targetLocale = (Locale) responseParams.get(TARGET_LOCALE);
-
+            //optional
             if (responseParams.containsKey(TAG)) {
                 strTag = (String) responseParams.get(TAG);
             }
 
+            if(m_localInstance.isVersionSupported()) {
+                if (responseParams.containsKey(VERSION)) {
+                    nVer = (int) responseParams.get(VERSION);
+                } else if (m_initParams.containsKey(VERSION)) {
+                    nVer = (int) m_initParams.get(VERSION);
+                } else {
+                    nVer = m_localInstance.getLatestVersion(strKey);
+                    if (nVer == MetaObjectInfo.NO_SUCH_KEY) {
+                        nVer = 0;
+                    }else{
+                        nVer += 1;
+                    }
+                }
+            }
+
             if (targetLocale.isLocalLocale() == true) {
                 //Put locally
-                obj = m_localInstance.put(strKey, value, targetLocale.getTierName());
+                obj = m_localInstance.put(strKey, nVer, value, targetLocale.getTierName());
 
                 if (obj != null) {
                     strReason = OK;
@@ -63,8 +91,9 @@ public class StoreResponse extends Response {
                         operationLatency.updateTierName(targetLocale.getTierName());
                     }
 
-                    //Which keys in which locale and version?
-                    Map<Locale, Map<MetaObjectInfo, Vector<Integer>>> keyList = new HashMap<>();
+                    // Nan: Comment them out
+                    // Which keys in which locale and version?
+                    /* Map<Locale, Map<MetaObjectInfo, Vector<Integer>>> keyList = new HashMap<>();
 
                     Map<MetaObjectInfo, Vector<Integer>> keys = new HashMap<>();
                     Vector<Integer> vers = new Vector<>();
@@ -74,19 +103,23 @@ public class StoreResponse extends Response {
                     keyList.put((Locale) responseParams.get(TARGET_LOCALE), keys);
 
                     //Fill-out params for the next response if exists
-                    responseParams.put(KEY_LIST, keyList);
+                    responseParams.put(KEY_LIST, keyList);*/
+
                     responseParams.put(VERSION, nVer);
                     responseParams.put(LAST_MODIFIED_TIME, lLastModifiedTime);
-                    responseParams.put(TAG, strTag);
+                    if(strTag != null && strTag != ""){
+                        responseParams.put(TAG, strTag);
+                    }
                     responseParams.put(TIER_NAME, targetLocale.getTierName());
-
+                    // Nan: why need the following function?
                     addObjsToUpdate(obj, responseParams);
                 } else {
                     strReason = "Failed to put data into Tier: " + targetLocale.getTierName();
                 }
             } else {
-                //forward put operation
-                //Meta data will be updated by broadcasting later with this forward
+                // forward put operation
+                // Meta data will be updated by broadcasting later with this forward
+                // What if peers also don't have this key. For example, just after the wiera is set up.
                 bRet = Response.respondAtRuntimeWithClass(m_localInstance, ForwardGetResponse.class, responseParams);
 
                 if (bRet == false) {
@@ -128,5 +161,8 @@ public class StoreResponse extends Response {
 
         //Set runtime param
         responseParams.put(TARGET_LOCALE, targetLocale);
+
+
+
     }
 }

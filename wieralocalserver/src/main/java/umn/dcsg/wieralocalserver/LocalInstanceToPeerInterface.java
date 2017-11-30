@@ -1,6 +1,7 @@
 package umn.dcsg.wieralocalserver;
 
 import com.google.gson.Gson;
+import org.apache.zookeeper.server.persistence.Util;
 import umn.dcsg.wieralocalserver.info.Latency;
 import org.apache.commons.codec.binary.Base64;
 import org.apache.thrift.TException;
@@ -58,135 +59,6 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
 
         return response.toString();
     }
-
-    @Override
-    public String forwardPutRequest(String strPutReq){
-        String strReason = NOT_HANDLED;
-        boolean bRet;
-        int nVer;
-        long lLastModifiedTime;
-
-        JSONObject response = new JSONObject();
-
-        JSONObject obj = new JSONObject(strPutReq);
-        String strKey = (String) obj.get(KEY);
-        byte[] value = Base64.decodeBase64((String) obj.get(VALUE));
-        String strFrom = (String) obj.get(FROM);
-        String strTag;
-
-        if(obj.has(TAG) == true) {
-            strTag = (String) obj.get(TAG);
-        }
-
-        //Handling when peer instance does not know about the tiername in this instance.
-        //Find and use the fastest storage tier in this instance
-        if (m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(value)) == true) {
-            m_localInstance.m_localInfo.incrementalForwardedRequestCnt(strFrom, PUT);
-
-            MetaObjectInfo meta = m_localInstance.getMetadata(strKey);
-            nVer = meta.getLatestVersion();
-            lLastModifiedTime = meta.getLastModifiedTime();
-
-            strReason = OK;
-            bRet = true;
-        } else {
-            strReason = "Failed to putObject the key-value forwarded into Primary Instance";
-            bRet = false;
-
-            nVer = MetaObjectInfo.NO_SUCH_VERSION;
-            lLastModifiedTime = 0;
-        }
-
-        response.put(TYPE, "forwardPutRequest");
-        response.put(RESULT, bRet);
-        response.put(VALUE, strReason);
-        response.put(REASON, strReason);
-        response.put(VERSION, nVer);
-        response.put(LAST_MODIFIED_TIME, lLastModifiedTime);
-
-        //System.out.println("Forwarding: " + strReason);
-        return response.toString();
-    }
-
-    //Nan: call by peer, forwardGET
-    //input KEY:FROM:[VERSION:TIER_NAME]
-    //output RESULT:REASON:TYPE:VALUE
-    @Override
-    public String get(String strReq) throws TException {
-        //This is forwarded get operation from other peers
-        JSONObject response = new JSONObject();
-
-        try {
-            JSONObject obj = new JSONObject(strReq);
-
-            String strKey = (String) obj.get(KEY);
-            String strFrom = (String) obj.get(FROM);
-            String strTierName = m_localInstance.m_strDefaultTierName;
-            int nVer = m_localInstance.getLatestVersion(strKey);
-            if (obj.has(VERSION) == true) {
-                nVer = (int) obj.get(VERSION);
-            }
-
-            if (obj.has(TIER_NAME) == true) {
-                strTierName = (String) obj.get(TIER_NAME);
-            }
-
-            MetaObjectInfo meta = m_localInstance.getMetadata(strKey);
-            if(meta != null){
-                if(meta.hasLocale(strTierName)){
-
-                }else if(meta.hasLocale( m_localInstance.m_strDefaultTierName)){
-                    strTierName = m_localInstance.m_strDefaultTierName;
-                }else{
-                    strTierName = meta.getFastTier(nVer);
-                }
-                if(strTierName != null){
-                    byte[] bytes = m_localInstance.get(strKey, nVer, strTierName);
-                    //Increase forwarded get operation
-                    m_localInstance.m_localInfo.incrementalForwardedRequestCnt(strFrom, GET);
-                    if (bytes != null) {
-                        response.put(RESULT, true);
-                        response.put(VALUE, Base64.encodeBase64String(bytes));
-
-                    }
-                }
-            }else{
-                response.put(RESULT, false);
-                response.put(REASON, "Failed to find a value associated with the key");
-            }
-        } catch (Exception e) {
-            e.printStackTrace();
-            response.put(RESULT, false);
-            response.put(REASON, e.getMessage());
-        }
-        response.put(TYPE, GET);
-        return response.toString();
-    }
-    // Nan
-    // output RESULT:REASON:TYPE:VALUE
-    @Override
-    public String getLatestVersion(String strKey) throws TException {
-        String strReason = NOT_HANDLED;
-        boolean bRet = false;
-        JSONObject response = new JSONObject();
-
-        int nVer = m_localInstance.getLatestVersion(strKey);
-
-        if (nVer >= 0) {
-            strReason = OK;
-            bRet = true;
-        } else {
-            strReason = "Failed to find the latest version";
-        }
-
-        response.put(RESULT, bRet);
-        response.put(VALUE, nVer);
-        response.put(VERSION, nVer);
-        response.put(REASON, strReason);
-        response.put(TYPE, "getLatestVersion");
-
-        return response.toString();
-    }
     //Nan:
     //input KEY:VALUE:[TAG:VERSION:TIER_NAME:CONFLICT_CHECK]
     //output TYPE:RESULT:VALUE:REASON
@@ -200,7 +72,7 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
         String strTiername = "";
         boolean bConflictCheck = false;
         String strKey = (String) req.get(KEY);
-        byte[] value = Base64.decodeBase64((String) req.get(VALUE));
+        byte[] value = Utils.decodeBytes((String) req.get(VALUE));
         MetaObjectInfo obj = m_localInstance.getMetadata(strKey);
         if(req.has(TAG) == true) {
             strTag = (String) req.get(TAG);
@@ -242,25 +114,167 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
     }
 
     @Override
+    //Nan:
+    //input KEY:VALUE:FROM:[TAG]
+    public String forwardPutRequest(String strPutReq){
+        String strReason = NOT_HANDLED;
+        boolean bRet;
+        int nVer;
+        long lLastModifiedTime;
+
+        JSONObject response = new JSONObject();
+
+        JSONObject obj = new JSONObject(strPutReq);
+        String strKey = (String) obj.get(KEY);
+        byte[] value = Utils.decodeBytes((String) obj.get(VALUE));
+        String strFrom = (String) obj.get(FROM);
+        String strTag;
+
+        if(obj.has(TAG) == true) {
+            strTag = (String) obj.get(TAG);
+        }
+
+        //Handling when peer instance does not know about the tiername in this instance.
+        //Find and use the fastest storage tier in this instance
+        if (m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(value)) == true) {
+            m_localInstance.m_localInfo.incrementalForwardedRequestCnt(strFrom, PUT);
+
+            MetaObjectInfo meta = m_localInstance.getMetadata(strKey);
+            nVer = meta.getLatestVersion();
+            lLastModifiedTime = meta.getLastModifiedTime();
+
+            strReason = OK;
+            bRet = true;
+        } else {
+            strReason = "Failed to putObject the key-value forwarded into Primary Instance";
+            bRet = false;
+
+            nVer = MetaObjectInfo.NO_SUCH_VERSION;
+            lLastModifiedTime = 0;
+        }
+
+        response.put(TYPE, "forwardPutRequest");
+        response.put(RESULT, bRet);
+        response.put(VALUE, strReason);
+        response.put(REASON, strReason);
+        response.put(VERSION, nVer);
+        response.put(LAST_MODIFIED_TIME, lLastModifiedTime);
+
+        //System.out.println("Forwarding: " + strReason);
+        return response.toString();
+    }
+
+    //Nan: call by peer, forwardGET
+    //input KEY:FROM:[VERSION:TIER_NAME]
+    //output RESULT:REASON:TYPE:VALUE:VERSION
+    @Override
+    public String get(String strReq) throws TException {
+        //This is forwarded get operation from other peers
+        JSONObject response = new JSONObject();
+
+        try {
+            JSONObject obj = new JSONObject(strReq);
+
+            String strKey = (String) obj.get(KEY);
+            String strFrom = (String) obj.get(FROM);
+            String strTierName = m_localInstance.m_strDefaultTierName;
+            int nVer = m_localInstance.getLatestVersion(strKey);
+            if (obj.has(VERSION) == true) {
+                nVer = (int) obj.get(VERSION);
+            }
+
+            if (obj.has(TIER_NAME) == true) {
+                strTierName = (String) obj.get(TIER_NAME);
+            }
+
+            MetaObjectInfo meta = m_localInstance.getMetadata(strKey);
+            if(meta != null){
+                if(meta.hasLocale(strTierName)){
+
+                }else if(meta.hasLocale( m_localInstance.m_strDefaultTierName)){
+                    strTierName = m_localInstance.m_strDefaultTierName;
+                }else{
+                    strTierName = meta.getFastTier(nVer);
+                }
+                if(strTierName != null){
+                    byte[] bytes = m_localInstance.get(strKey, nVer, strTierName);
+                    //Increase forwarded get operation
+                    m_localInstance.m_localInfo.incrementalForwardedRequestCnt(strFrom, GET);
+                    if (bytes != null) {
+                        response.put(RESULT, true);
+                        response.put(VALUE, Utils.encodeBytes(bytes));
+                        response.put(VERSION, nVer);
+                    }
+                }
+            }else{
+                response.put(RESULT, false);
+                response.put(REASON, "Failed to find a value associated with the key");
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            response.put(RESULT, false);
+            response.put(REASON, e.getMessage());
+        }
+        response.put(TYPE, GET);
+        return response.toString();
+    }
+    // Nan
+    // output RESULT:REASON:TYPE:VALUE
+    @Override
+    public String getLatestVersion(String strKey) throws TException {
+        String strReason = NOT_HANDLED;
+        boolean bRet = false;
+        JSONObject response = new JSONObject();
+
+        int nVer = m_localInstance.getLatestVersion(strKey);
+
+        if (nVer >= 0) {
+            strReason = OK;
+            bRet = true;
+        } else {
+            strReason = "Failed to find the latest version";
+        }
+
+        response.put(RESULT, bRet);
+        response.put(VALUE, nVer);
+        response.put(VERSION, nVer);
+        response.put(REASON, strReason);
+        response.put(TYPE, "getLatestVersion");
+
+        return response.toString();
+    }
+
+
+    @Override
     public String getClusterLock(String strLockReq) throws TException {
 
         JSONObject lockReq = new JSONObject(strLockReq);
         String strKey = (String) lockReq.get(KEY);
         boolean bWrite = (boolean) lockReq.get(IS_WRITE);
-
+        if(bWrite){
+            m_localInstance.writeLock(strKey);
+        }else{
+            m_localInstance.readLock(strKey);
+        }
         //For ret
         JSONObject response = new JSONObject();
         //DataDistributionUtil dataDistribution = m_localInstance.m_peerInstanceManager.getDataDistribution();
         String strResponse = "";
 
 
-
+        response.put(RESULT,true);
         response.put(VALUE, strResponse);
         System.out.println(strResponse);
 
         return response.toString();
     }
 
+    /**
+     * Nan:
+     *  The implemented method is not according to the initial usage.
+     *  Now, it is used to get the local instance lock.
+     *  Discuss with Kwangsung
+     * */
     @Override
     public String releaseClusterLock(String strLockReq) throws org.apache.thrift.TException {
         //Extract req
@@ -268,10 +282,13 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
         String strKey = (String) lockReq.get(KEY);
         boolean bWrite = (boolean) lockReq.get(IS_WRITE);
 
+        if(bWrite){
+            m_localInstance.writeReleaseLock(strKey);
+        }else{
+            m_localInstance.readReleaseLock(strKey);
+        }
         JSONObject response = new JSONObject();
         String strResponse = NOT_HANDLED;
-
-
         response.put(VALUE, strResponse);
         System.out.println(strResponse);
 

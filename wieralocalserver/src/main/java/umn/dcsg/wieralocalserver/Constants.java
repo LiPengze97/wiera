@@ -175,6 +175,10 @@ public class Constants {
     public static final String UNCOMPRESS_RESPONSE = "UnCompress";
     public static final String GROW_RESPONSE = "Grow";
     public static final String SHRINK_RESPONSE = "Shrink";
+    public static final String GET_LATEST_DATA_RESPONSE = "GetLatestData";
+    public static final String GET_LATEST_VERSION_RESPONSE = "GetLatestVersion";
+    public static final String SET_LATEST_DATA = "SetLatestData";
+    public static final String QUORUM_CONSISTENCY = "QuorumConsistency";
 
     //For Wiera
     public static final String BROADCAST_RESPONSE = "Broadcast";

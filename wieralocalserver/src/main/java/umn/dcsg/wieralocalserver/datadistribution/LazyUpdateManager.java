@@ -91,17 +91,17 @@ public class LazyUpdateManager {
                     }
                 } else {
                     //Check whether version has been changed while in the QueueResponse
-                    String strKey = (String)responseParams.get(KEY);
+                    String strKey = (String) responseParams.get(KEY);
                     byte[] value = null;
 
-                    if(responseParams.containsKey(VALUE) == true) {
-                        value = (byte[])responseParams.get(VALUE);
+                    if (responseParams.containsKey(VALUE) == true) {
+                        value = (byte[]) responseParams.get(VALUE);
                     } else {
                         MetaObjectInfo obj = m_localInstance.getMetadata(strKey);
 
                         //If metadata is not updated yet.
-                        if(obj == null) {
-                            if(responseParams.containsKey(OBJS_LIST) == true) {
+                        if (obj == null) {
+                            if (responseParams.containsKey(OBJS_LIST) == true) {
                                 Map<String, MetaObjectInfo> objsList = (Map) responseParams.get(OBJS_LIST);
 
                                 if (objsList.containsKey(strKey) == true) {
@@ -110,8 +110,8 @@ public class LazyUpdateManager {
                             }
                         }
 
-                        if(obj != null) {
-                            value = m_localInstance.getInternal(obj.getVersionedKey((int)responseParams.get(VERSION)), (String)responseParams.get(TIER_NAME));
+                        if (obj != null) {
+                            value = m_localInstance.getInternal(obj.getVersionedKey((int) responseParams.get(VERSION)), (String) responseParams.get(TIER_NAME));
                         }
                     }
 
@@ -120,12 +120,11 @@ public class LazyUpdateManager {
                                 responseParams.get(KEY), responseParams.get(TIER_NAME));
                     } else {
                         //This is for lazy broadcasting to other instances.
-                        OperationLatency operationLatency = (OperationLatency)responseParams.get(OPERATION_LATENCY);
+                        OperationLatency operationLatency = (OperationLatency) responseParams.get(OPERATION_LATENCY);
                         Latency latency = operationLatency.addTimer(BroadcastResponse.class.getSimpleName());
                         latency.start();
                         //Create Broadcasting response and run
-                        if(Response.respondAtRuntimeWithClass(m_localInstance, BroadcastResponse.class, responseParams) == false)
-                        {
+                        if (Response.respondAtRuntimeWithClass(m_localInstance, BroadcastResponse.class, responseParams) == false) {
                             System.out.println("Failed to broadcast: " + responseParams.get(REASON));
                         }
                         latency.stop();

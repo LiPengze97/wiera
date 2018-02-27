@@ -111,7 +111,7 @@ public class LocalServer {
 
 		if (m_zkClient!= null) {
 			m_zkClient.start();
-			System.out.println("Zookeeper Client starts.");
+			System.out.println("Zookeeper WieraClient starts.");
 		} else {
 			System.out.println("Seems there is no ZK running.");
 		}
@@ -169,6 +169,8 @@ public class LocalServer {
 					m_strFQDN = InetAddress.getByName(m_strExternalIP).getCanonicalHostName();
 				}
 
+				m_strExternalIP = strExternalIP;
+
 				return strExternalIP;
 			} catch (IOException e) {
 				e.printStackTrace();
@@ -221,6 +223,8 @@ public class LocalServer {
 
 		//Get WieraID First
     	String strWieraID = policy.getString(ID);
+
+    	//Note this instance_CNT count will be set by Wiera Central - check whether stand alone or not.
     	int nInstanceCnt = policy.getInt(INSTANCE_CNT);
 
         if (strWieraID == null || strWieraID.length() == 0) {
@@ -323,8 +327,7 @@ public class LocalServer {
             //Running LocalServer for running multiple instances
 			final LocalServer localServer = new LocalServer(cmd.getOptionValue("w"), nWieraPort, cmd.getOptionValue("w"));
 			runLocalServer(localServer);
-		} else //Running LocalInstance without Wiera
-		{
+		} else { //Running LocalInstance without Wiera
 			String strPolicyPath = "policy_example/low_latency.json";
 			int nPort = 55556;
 
@@ -349,16 +352,21 @@ public class LocalServer {
 			JSONObject jsonLocalInstancePolicy;
 
 			//For consistency
-			if(jsonWieraPolicy.has(HOSTNAME_LIST) == true) {
-				jsonLocalInstancePolicy = jsonWieraPolicy.getJSONObject(HOSTNAME_LIST);
+			if(jsonWieraPolicy.has(HOST_LIST) == true) {
+				jsonLocalInstancePolicy = jsonWieraPolicy.getJSONObject(HOST_LIST);
 				jsonLocalInstancePolicy.put(ID, jsonWieraPolicy.getString(ID));
 			} else {
 				jsonLocalInstancePolicy = jsonWieraPolicy;
 			}
 
 			//Running LocalInstance without Wiera
-			LocalInstance m_instance = new LocalInstance("config.txt", jsonLocalInstancePolicy, true);
-			m_instance.runForever(jsonLocalInstancePolicy);
+			try {
+				LocalInstance m_instance = new LocalInstance("config.txt", jsonLocalInstancePolicy, true);
+				m_instance.runForever(jsonLocalInstancePolicy);
+			} catch (Exception e) {
+				e.printStackTrace();
+				System.out.println("Failed to execute local server due to failure to find policy for standalone mode.");
+			}
 		}
 	}
 

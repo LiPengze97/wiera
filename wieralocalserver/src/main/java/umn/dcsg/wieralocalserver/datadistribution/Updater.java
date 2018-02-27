@@ -42,7 +42,7 @@ public class Updater implements Runnable {
     @Override
     public void run() {
         //System.out.println("[debug] Sender send update to peer in thread");
-        m_strReason =  _sendUpdate();
+        m_strReason = _sendUpdate();
     }
 
     public String _sendUpdate() {
@@ -101,7 +101,11 @@ public class Updater implements Runnable {
         return strReason;
     }
 
-    public String getReason() {return m_strReason;}
-    public String getTargetHostName() {return m_strTargetHostName;}
+    public String getReason() {
+        return m_strReason;
+    }
 
+    public String getTargetHostName() {
+        return m_strTargetHostName;
+    }
 }

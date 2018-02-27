@@ -67,6 +67,7 @@ public class BroadcastResponse extends Response {
         if (responseParams.containsKey(TARGET_LOCALES) == true) {
             targetLocaleList = (List) responseParams.get(TARGET_LOCALES);
         } else {
+            //Broadcast all
             if (m_targetHostnameList == null || ((m_targetHostnameList.size() == 1) && (m_targetHostnameList.get(0).equals(ALL) == true))) {
                 m_targetHostnameList = m_localInstance.m_peerInstanceManager.getPeersHostnameList();
             }
@@ -89,6 +90,15 @@ public class BroadcastResponse extends Response {
             //If target is in the targetlist send value.
             updater = new Updater(m_localInstance.m_peerInstanceManager, locale.getHostName(), strKey, nVer, lSize, value, locale.getTierName(), strTag, lLastModifiedTime, false);
 
+            if (updater != null) {
+                //Thread run
+                senderThread = new Thread(updater);
+                senderThread.start();
+
+                //Add to map
+                senderList.put(senderThread, updater);
+            }
+
             //Remove from the lstForMeta for sending meta
             lstForMeta.remove(locale.getHostName());
         }
@@ -101,15 +111,15 @@ public class BroadcastResponse extends Response {
             Gson gson = new Gson();
             String strList = gson.toJson(targetLocaleList);
             updater = new Updater(m_localInstance.m_peerInstanceManager, strTargetHostname, strKey, nVer, 0, "".getBytes(), strList, strTag, lLastModifiedTime, true);
-        }
 
-        if (updater != null) {
-            //Thread run
-            senderThread = new Thread(updater);
-            senderThread.start();
+            if (updater != null) {
+                //Thread run
+                senderThread = new Thread(updater);
+                senderThread.start();
 
-            //Add to map
-            senderList.put(senderThread, updater);
+                //Add to map
+                senderList.put(senderThread, updater);
+            }
         }
 
         //Wait all - should be no much overhead for waiting each instance

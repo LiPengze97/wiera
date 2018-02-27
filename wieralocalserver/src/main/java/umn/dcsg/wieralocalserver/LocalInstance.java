@@ -4,6 +4,7 @@ import static umn.dcsg.wieralocalserver.TierInfo.TIER_TYPE.*;
 
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
+import org.apache.commons.lang3.text.StrLookup;
 import umn.dcsg.wieralocalserver.events.Event;
 import umn.dcsg.wieralocalserver.events.EventDispatch;
 import umn.dcsg.wieralocalserver.events.EventRegistry;
@@ -459,8 +460,7 @@ public class LocalInstance {
         m_strPolicyID = (String) policy.get(ID);
         JSONObject localPolicy;
 
-        if(policy.has(LocalServer.getHostName()) == true)
-        {
+        if(policy.has(LocalServer.getHostName()) == true) {
             localPolicy = policy.getJSONObject(LocalServer.getHostName());
         } else {
             throw new NoSuchFieldException();
@@ -665,7 +665,7 @@ public class LocalInstance {
 
     private boolean InitServerForWiera() {
         try {
-            //For now we set to hard-coded port for Azure.
+            //For now we put to hard-coded port for Azure.
             TServerSocket socket = new TServerSocket(0); //listenPort); -> now become random port for client.
             TServerTransport serverTransport = socket;
             TProtocolFactory tProtocolFactory = new TBinaryProtocol.Factory(true, true);
@@ -757,11 +757,12 @@ public class LocalInstance {
             HashMap<String, Integer> ports = new HashMap<String, Integer>();
             ports.put(APPLICATION_PORT, m_nServerPortForApplication);
             ports.put(INSTANCE_PORT, m_nServerPortForWiera);
-            req.put(VALUE, ports);
 
             if(m_bStandAloneMode == false) {
                 ports.put(PEER_PORT, m_peerInstanceManager.getPeersServerPort());
             }
+
+            req.put(VALUE, ports);
 
             String strResponse = getWieraClient().registerLocalInstance(req.toString());
             releaseWieraClient();
@@ -934,15 +935,14 @@ public class LocalInstance {
             if (obj != null) {
                 String strKey = key;
 
-                //Lastest as a Default
+                //Latest as a Default
                 if (nVer < 0) {
                     nVer = obj.getLastestVersion();
                 }
 
-                //If same versions are repicated to multiple tiers,
+                //If same versions are replicated to multiple tiers,
                 //Remove all
-                Tier tierInfo;
-                long lObjSize = 0;
+                long lObjSize = obj.getSize();
 
                 while (true) {
                     localLocale = obj.getLocale(nVer, true);
@@ -950,7 +950,6 @@ public class LocalInstance {
                     if (localLocale == null) {
                         break;
                     } else {
-                        tierInfo = m_tiers.getTier(localLocale.getTierName());
 
                         if (m_bVersioningSupport == true) {
                             strKey = obj.getVersionedKey(nVer);
@@ -961,7 +960,15 @@ public class LocalInstance {
                             System.out.printf("Failed to delete key from tier: %s\n", localLocale.getTierName());
                             break;
                         }
+
+                        //Remove locale from meta
+                        obj.removeLocale(nVer, localLocale);
                     }
+                }
+
+                //Remove version
+                if(m_bVersioningSupport == false || obj.getVersionList().size() == 0) {
+                    m_metadataStore.deleteObject(strKey);
                 }
 
                 return true;
@@ -1092,7 +1099,7 @@ public class LocalInstance {
                 return null;
             } else {
                 String strCurTierName = obj.getLocale(true).getTierName();
-                obj.updateVersion(nVer, LocalServer.getHostName(), strTierName, getLocalStorageTierType(strTierName), modified_time, value.length);
+                obj.updateVersion(nVer, modified_time, value.length);
 
                 //try to updates
                 String strVersionedKey = obj.getVersionedKey(nVer);
@@ -1137,31 +1144,19 @@ public class LocalInstance {
     }
 
     //Assume that all functions calling this function already have a lock for the key
-    public MetaObjectInfo updateMetadata(String strKey, String strHostName, String strTierName, int nValueSize, String strTag, Boolean bSupportVersion, Boolean bIsLocalTier) {
+    public MetaObjectInfo updateMetadata(String strKey, long lValueSize, String strTag, Boolean bSupportVersion) {
         MetaObjectInfo obj = getMetadata(strKey);
         long curTime = System.currentTimeMillis();
-        TierInfo.TIER_TYPE type;
-
-        if (bIsLocalTier == true) {
-            type = m_tiers.getTierType(strTierName);
-        } else {
-            type = REMOTE_TIER;
-        }
-
-        if (type == null) {
-            System.out.println("Cannot find storage tier name :\"" + strTierName + "\" from local instance.");
-            return null;
-        }
 
         //if not exist, create it
         if (obj == null) {
             //Create new
-            obj = new MetaObjectInfo(strKey, strHostName, strTierName, type, nValueSize, strTag, bSupportVersion);
+            obj = new MetaObjectInfo(strKey, lValueSize, strTag, bSupportVersion);
         }
 
         if (bSupportVersion == true) {
             //Add new version for putObject operation.
-            obj.addNewVersion(strHostName, strTierName, type, curTime, nValueSize);
+            obj.addNewVersion(curTime, lValueSize);
         }
 
         try {
@@ -1169,7 +1164,7 @@ public class LocalInstance {
             obj.setLAT(curTime);
             obj.setDirty();
             obj.setLastModifiedTime(obj.getLAT()); //added for EventualConsistencyResponse consistecny for now. (will use vector or something else);
-            obj.setSize(nValueSize);
+            obj.setSize(lValueSize);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -1189,17 +1184,6 @@ public class LocalInstance {
         return false;
     }
 
-    //This function will be used only when data is stored in non-local instance within Wiera
-    public MetaObjectInfo updateMetaDataOnly(String strKey, String strHostName, String strTierName, String strTag) {
-        ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
-
-        lock.writeLock().lock();
-        MetaObjectInfo obj = updateMetadata(strKey, strHostName, strTierName, strTierName.length(), strTag, isVersionSupported(), false);
-        lock.writeLock().unlock();
-
-        return obj;
-    }
-
     //Now return object info
     //This function only used for a new version
     //The bUpdateMeta will be true only if when the object is accessed by peer (forward)
@@ -1211,7 +1195,7 @@ public class LocalInstance {
             //System.out.format("Put operation Key: %s Size: %d TierName: %s\n", strKey, value.length, strTierName);
             lock.writeLock().lock();
 
-            obj = updateMetadata(strKey, LocalServer.getHostName(), strTierName, value.length, strTag, m_bVersioningSupport, true);
+            obj = updateMetadata(strKey, value.length, strTag, m_bVersioningSupport);
             if (obj != null) {
                 String strVersionedKey = obj.getVersionedKey();
                 if (putInternal(strVersionedKey, value, strTierName) == false) {
@@ -1311,6 +1295,36 @@ public class LocalInstance {
             return obj.hasLocale(nVer, Locale.getLocaleID(LocalServer.getHostName(), strTierName));
         }
 
+        return false;
+    }
+
+    //For now, simple call renaming api of each storage interface stored
+    public boolean rename(String strSrcKey, String strNewKey) {
+        //Currently, no file version.
+        //Check it can be found
+        /*MetaObjectInfo obj = getMetadata(strSrcKey);
+        MetaVerInfo metaVerInfo;
+        Map <Integer, MetaVerInfo> map = obj.getVersionList();
+
+        Map <String, Locale> localeMap;
+        Locale locale;
+
+        for(Integer ver: map.keySet()) {
+            metaVerInfo = map.get(ver);
+            localeMap = metaVerInfo.getLocaleList();
+
+            //Now assume that rename support only local locale
+            for(String strLocale: localeMap.keySet()) {
+                locale = localeMap.get(strLocale);
+                m_tiers.getTierInterface() locale.getLocaleID()
+
+            }
+        }*/
+        return false;
+
+    }
+
+    public boolean copy(String strSrcKey, String strNewKey) {
         return false;
     }
 }

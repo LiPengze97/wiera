@@ -10,7 +10,7 @@ package umn.dcsg.wieralocalserver;
 public class Constants {
     public static final int WIERA_PORT_FOR_LOCAL_SERVER = 55559;
     public static final int WIERA_PORT_FOR_APPLICATIONS = 55558;
-
+    public static final String NULL_VALUE = "nUlLvAlUe";
     public static final String MSGSTART = "[";
     public static final String MSGEND = "]";
     public static final String MSGPAIRSEPARATOR = ":";
@@ -57,9 +57,11 @@ public class Constants {
     public static final String TIER_LOCATION = "tier_location";
     public static final String TIER_EXPECTED_LATENCY = "tier_expected_latency";
     public static final String TAG = "tag";
+    public static final String CREATED_TIME = "created_time";
+    public static final String LAST_ACCESSED_TIME = "last_accessed_time";
     public static final String LAST_MODIFIED_TIME = "last_modified_time";
     public static final String HOSTNAME = "hostname";
-    public static final String HOSTNAME_LIST = "host_list";
+    public static final String HOST_LIST = "host_list";
     public static final String LOCAL_INSTANCES = "local_instances";
     public static final String STORAGE_TIERS = "storage_tiers";
     public static final String ONLY_META_INFO = "only_meta_info";
@@ -117,6 +119,7 @@ public class Constants {
     public static final String DATA_RETRIEVAL = "data_retrieval";
     public static final String DATA_WRITE = "data_write";
 
+    public static final String ACCESS_CNT = "access_cnt";
     public static final String GET_ACCESS_CNT = "get_access_cnt";
     public static final String PUT_ACCESS_CNT = "put_access_cnt";
     public static final String QUERY = "query";
@@ -129,15 +132,26 @@ public class Constants {
     public static final String STORAGE_PERCENTILE = "storage_pct";
     public static final String GET_SLA = "get_sla";
     public static final String PUT_SLA = "put_sla";
+
+    //Support applications APIs
     public static final String GET = "get";
     public static final String PUT = "put";
+    public static final String UPDATE = "update";
+    public static final String GET_VERSION = "getVersion";
+    public static final String GET_VERSION_LIST = "getVersionList";
+    public static final String GET_META_DATA = "getMetaData";
+    public static final String RENAME = "rename";
+    public static final String COPY = "copy";
+    public static final String REMOVE = "remove";
+    public static final String REMOVE_VERSION = "removeVersion";
+
 
     public static final long GB_TO_BYTE = 1000000000;
     public static final long DATA_SIZE = 8192; //135768
     //public static final long	DATA_SIZE = 1638432768;
     //public static final long	DATA_SIZE = 135768;
 
-    //For redis wrapper class
+    //For redis wrapper class and
     public static final String OK = "ok";
     public static final String PING = "ping";
 
@@ -190,9 +204,6 @@ public class Constants {
     public static final String MULTIPLE_PRIMARIES_CONSISTENCY = "MultiplePrimariesConsistency";
     public static final String QUORUM = "QuorumConsistencyResponse";
 
-
-    //public static final String CHANGES_CONSISTENCY = "Change
-
     //Available Params
     public static final String TO = "to";
     public static final String UPDATE_TO = "update_to";
@@ -211,10 +222,12 @@ public class Constants {
     //public static final String UPPER_THRESHOLD = "upper_threshold";
     public static final String PERCENT = "percent";
     public static final String DIRTY = "dirty";
+    public static final String PIN = "pin";
     public static final String TIMER_PERIOD = "period";
     public static final String RATE = "rate";
     public static final String TARGET_LOCALE = "target_locale";
     public static final String TARGET_LOCALES = "target_locales";
+    public static final String LOCALE_LIST = "locale_list";
     public static final String ALL_PEER_HOSTNAMES = "all_peer_hostname";
     public static final String CONFLICT_CHECK = "conflict_check";
     public static final String LAZY_UPDATE = "lazy_update";
@@ -227,7 +240,10 @@ public class Constants {
     public static final String OLDEST= "oldest";
     public static final String NEWEST = "newest";
 
-    //Messages
+    //Error message
     public static final String NOT_HANDLED = "Not handled";
+    public static final String NOT_SUPPORTED = "Not supported yet";
     public static final String NOT_SUPPORTED_QUERY = "Not supported query";
+    public static final String NO_VERSION = "Failed to find key with given version";
+    public static final String NO_META = "Failed to find Meta data with given key";
 }

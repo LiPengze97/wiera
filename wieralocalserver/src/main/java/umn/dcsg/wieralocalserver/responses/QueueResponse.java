@@ -20,17 +20,9 @@ public class QueueResponse extends Response {
     public QueueResponse(LocalInstance instance, String strEventName, Map<String, Object> params) {
         super(instance, strEventName, params);
 
-        if(instance.isStandAloneMode() == false)
-        {
-            if(params.containsKey(TO) == true) {
-                m_targetHostnameList = (List)params.get(TO);
-            }
-
-            //Broadcast to all
-            if(m_targetHostnameList == null || ((m_targetHostnameList.size() == 1) && (m_targetHostnameList.get(0).equals(ALL) == true))) {
-                if(m_localInstance.isStandAloneMode() == false) {
-                    m_targetHostnameList = m_localInstance.m_peerInstanceManager.getPeersHostnameList();
-                }
+        if (instance.isStandAloneMode() == false) {
+            if (params.containsKey(TO) == true) {
+                m_targetHostnameList = (List) params.get(TO);
             }
 
             if (m_initParams.containsKey(WORKER_CNT) == true) {
@@ -53,8 +45,7 @@ public class QueueResponse extends Response {
 
     @Override
     public boolean respond(Map<String, Object> responseParams) {
-        if(m_localInstance.isStandAloneMode() == true)
-        {
+        if (m_localInstance.isStandAloneMode() == true) {
             //Result
             responseParams.put(RESULT, true);
             responseParams.put(REASON, getClass().getSimpleName() + " cannot response in LocalInstance stand-alone mode");
@@ -68,10 +59,14 @@ public class QueueResponse extends Response {
             List lstPeerInstances;
 
             //If target changed at run-time
-            if(responseParams.containsKey(TARGET_LOCALES) == true)
-            {
+            if (responseParams.containsKey(TARGET_LOCALES) == true) {
                 lstPeerInstances = (List) responseParams.get(TARGET_LOCALES);
             } else {
+                //Broadcast to all
+                if (m_targetHostnameList == null || ((m_targetHostnameList.size() == 1) && (m_targetHostnameList.get(0).equals(ALL) == true))) {
+                    m_targetHostnameList = m_localInstance.m_peerInstanceManager.getPeersHostnameList();
+                }
+
                 lstPeerInstances = Locale.getLocalesWithoutTierName(m_targetHostnameList);
             }
 

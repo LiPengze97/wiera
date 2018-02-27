@@ -5,6 +5,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.nio.file.Path;
 
+import static java.nio.file.StandardCopyOption.REPLACE_EXISTING;
+
 //import org.apache.log4j.Logger;
 
 /**
@@ -15,10 +17,13 @@ import java.nio.file.Path;
  * To change this template use File | Settings | File Templates.
  */
 public class LocalDiskInterface extends StorageInterface {
+	//Special Chracter for directory key. (reserved)
+	//If user wants to set a key that ends '/'
+	private static String m_strSpecialKeyDirectory = "special_key_for_this_directory_should_not_removed";
 	private String m_strLocalFolder;
-
 	//For Testing Purpose
 	private boolean m_bUseDirectIO = false;
+
 
 	public LocalDiskInterface(String strLocalDirectory, boolean bDirectIO) {
 		this.m_strLocalFolder = strLocalDirectory;
@@ -74,6 +79,11 @@ public class LocalDiskInterface extends StorageInterface {
 				}
 			}
 
+			//Check the key is for directory or not.
+			if (key.endsWith("/") == true) {
+				key += m_strSpecialKeyDirectory;
+			}
+
 			if (m_bUseDirectIO == false) {
 				FileOutputStream fos = new FileOutputStream(m_strLocalFolder + key, false);
 				fos.write(value);
@@ -102,6 +112,11 @@ public class LocalDiskInterface extends StorageInterface {
 		//ObjectInputStream in = null;
 		byte[] value = null;
 		try {
+			//Check the key is for directory or not.
+			if (key.substring(key.length() - 1).equals("/") == true) {
+				key += m_strSpecialKeyDirectory;
+			}
+
 			if (m_bUseDirectIO == false) {
 				Path path = Paths.get(m_strLocalFolder + key);
 				value = Files.readAllBytes(path);
@@ -125,18 +140,58 @@ public class LocalDiskInterface extends StorageInterface {
 	}
 
 	@Override
+	public boolean rename(String oldKey, String newKey) {
+		File srcFile = new File(m_strLocalFolder + oldKey);
+		File targetFile = new File(m_strLocalFolder + newKey);
+
+		if (srcFile.exists() == true && srcFile.isFile() == true && targetFile.exists() == false) {
+			return srcFile.renameTo(targetFile);
+		}
+
+		return false;
+	}
+
+	@Override
+	public boolean copy(String oldKey, String newKey) {
+		File srcFile = new File(m_strLocalFolder + oldKey);
+		File targetFile = new File(m_strLocalFolder + newKey);
+
+		if (srcFile.exists() == true && srcFile.isFile() == true && targetFile.exists() == false) {
+			try {
+				Files.copy(srcFile.toPath(), targetFile.toPath(), REPLACE_EXISTING);
+			} catch (IOException e) {
+				e.printStackTrace();
+				return false;
+			}
+		}
+
+		return true;
+	}
+
+/*	@Override
+	protected boolean rename(String oldKey, String newKey) {
+		File f = new File(m_strLocalFolder + oldKey);
+
+		if(f.exists() == true) {
+			return f.renameTo(new File(m_strLocalFolder + newKey));
+		}
+
+		return false;
+	}*/
+
+	@Override
 	public boolean delete(String key) {
 		File f = new File(m_strLocalFolder + key);
 		return f.delete();
 	}
 
 	@Override
-	protected boolean growTier(int byPercent) {
+	public boolean growTier(int byPercent) {
 		return true;
 	}
 
 	@Override
-	protected boolean shrinkTier(int byPercent) {
+	public boolean shrinkTier(int byPercent) {
 		return true;
 	}
 }

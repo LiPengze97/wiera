@@ -112,6 +112,8 @@ class WieraTieraInstanceHandler:
 					ports = instance_info['value']
 					application_port = ports['application_port']
 
+					print ports
+
 					if 'peer_port' in ports:
 						peer_port = ports['peer_port']
 					else:

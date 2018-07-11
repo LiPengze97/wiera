@@ -112,6 +112,8 @@ class LocalInstanceToWieraHandler:
 					ports = instance_info['value']
 					application_port = ports['application_port']
 
+					print ports
+
 					if 'peer_port' in ports:
 						peer_port = ports['peer_port']
 					else:
@@ -177,6 +179,8 @@ class LocalInstanceManager:
 		self.port = 0
 		self.policy = policy
 		self.monitoring_info = {}
+		self.monitoring_lock = threading.Lock()
+            
 
 		# set handler to our implementation
 		# to avoid any sync issue with portnumber
@@ -322,6 +326,7 @@ class LocalInstanceManager:
 	
 	def update_monitoring_info(self, data):
 		try:
+			self.monitoring_lock.acquire()
 			result = {}
 
 			if data != None:
@@ -342,6 +347,8 @@ class LocalInstanceManager:
 		except:
 			print 'except happen'
 			raise
+		finally:
+			self.monitoring_lock.release()
 			
 		return result			
 

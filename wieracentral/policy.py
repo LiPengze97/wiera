@@ -1,8 +1,6 @@
-import socket
 import time
 import sys
 import json
-import threading
 import localInstanceManager
 import uuid
 import wieraCommon
@@ -10,7 +8,7 @@ from pprint import *
 
 sys.path.append('./trips')
 
-#import trips
+import trips
 
 class Policy:	
 	def __init__(self, wiera_instance, policy_spec):
@@ -19,17 +17,22 @@ class Policy:
 		self.available_host_list = None
 		self.cost_info = None
 		self.goals = None
+		self.running = False
+		self.configurations = {}
 
 		if 'id' in policy_spec:
 			self.policy_id = policy_spec['id']
 		else:
 			self.policy_id = str(uuid.uuid4())
 
+		if 'configurations' in policy_spec:
+			self.configurations = policy_spec['configurations']
+
 		#should be from policy -> For now only server list
 		self.local_instance_manager = localInstanceManager.LocalInstanceManager(self)
 
-#		if 'trips' in policy_spec:
-#			self.trips = self.init_trips()
+		if 'trips' in policy_spec:
+			self.trips = self.init_trips()
 #		self.re_evaluate_data_placement(None)
 
 	def re_evaluate_data_placement(self, query):
@@ -143,7 +146,7 @@ class Policy:
 
 		if self.check_host_status() == False:
 			result['result'] = False
-			result['value'] = 'Not all Local servers are ready to spwan instances'
+			result['value'] = 'Not all Local servers are ready to spawn instances'
 			return result
 
 		instance_manager_ip, instance_manager_port = self.get_instance_manager_address()
@@ -172,6 +175,7 @@ class Policy:
 			request = {}
 			request['type'] = 'start_instance'
 			request['id'] = self.policy_id
+			request['configurations'] = self.configurations
 			request['instance_cnt'] = self.get_desired_instance_cnt()
 			request['manager_ip'] = instance_manager_ip
 			request['manager_port'] = instance_manager_port
@@ -193,10 +197,23 @@ class Policy:
 		wieraCommon.join_threads(thread_list)
 #		print str(time.time() - start) + ' ms for join : ' + str(len(thread_list))
 
+		#check whether all instances are connected and ready to be used here.
+		for i in range(0, 5):
+			if self.check_instance_cnt() == True:
+				break
+			else:
+				time.sleep(2)
+
+		#set flag to prevent execute twice
+		self.running = True
+
 		result['result'] = True
 		result['value'] = self.policy_id
 	
 		return result
+
+	def is_running(self):
+		return self.running
 
 	def get_policy_id(self):
 		return self.policy_id

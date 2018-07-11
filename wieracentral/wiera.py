@@ -26,18 +26,18 @@ class ApplicationToWieraHandler:
 	def __init__(self, wiera):
 		self.wiera = wiera
 		
-	def startInstances(self, req_policy):
+	def startWieraInstance(self, req_policy):
 		req_policy = req_policy.replace("'", '"')
 		policy = json.loads(req_policy)
-		return self.wiera.startInstances(policy)
+		return self.wiera.startInstance(policy)
 
-	def stopInstances(self, req_policy):
+	def stopWieraInstance(self, req_policy):
 		req_policy = req_policy.replace("'", '"')
 		policy = json.loads(req_policy)
-		return self.wiera.stopInstances(policy);
+		return self.wiera.stopInstance(policy);
 
-	def getInstances(self, policy_id, client_ip):
-		result = self.wiera.getInstances(policy_id, client_ip);
+	def getWieraInstance(self, policy_id, client_ip):
+		result = self.wiera.getInstance(policy_id, client_ip);
 #		need to be sorted based on distance
 #		instance_list.sort(self.sort_by_distance)
 		return result
@@ -82,6 +82,7 @@ class WieraServer:
 
 		#policy manager
 		self.policy_manager = policyManager.PolicyManager()
+		self.request_lock = threading.Lock()
 
 		if self.conf.get('ui_command') == True:
 			self.user_input_thread = threading.Thread(target=self._ui_handler)
@@ -236,23 +237,33 @@ class WieraServer:
 
 		return available_hostname_list
 
-	def startInstances(self, policy_spec):
-		start = time.time()
-		result = {}
-			
-		new_policy = self.policy_manager.add_new_policy(self, policy_spec)
+	def startInstance(self, policy_spec):
+		self.request_lock.acquire()
 
-		if new_policy == None:
-			result['result'] = False
-			result['value'] = 'Failed to create a new policy obejct'
-			print 'failed create new policy'
-		else:
-			result = new_policy.start_instances()
-			elapse = time.time() - start
-			print str(elapse*1000) + ' ms takes to create instances'
+		try:
+			start = time.time()
+			result = {}
+
+			policy = self.policy_manager.add_new_policy(self, policy_spec)
+
+			if policy == None:
+				result['result'] = False
+				result['value'] = 'Failed to create a new policy object'
+				print 'failed create new policy'
+			else:
+				if policy.is_running() == False:
+					result = policy.start_instances()
+					elapse = time.time() - start
+					print str(elapse*1000) + ' ms takes to create instances'
+				else:
+					result['result'] = True
+					result['value'] = policy.policy_id
+		finally:
+			self.request_lock.release()
+
 		return json.dumps(result)
 
-	def stopInstances(self, policy):
+	def stopInstance(self, policy):
 		result = {}
 		policy_id = policy['policy_id']
 		policy_found = self.policy_manager.get_policy(policy_id)
@@ -293,7 +304,7 @@ class WieraServer:
 
 		return json.dumps(result)
 		
-	def getInstances(self, policy_id, client_ip):
+	def getInstance(self, policy_id, client_ip):
 		policy = self.policy_manager.get_policy(policy_id)
 		result = {}
 
@@ -311,11 +322,13 @@ class WieraServer:
 				instance_list = self._sort_by_distance(instance_list, client_ip)
 
 			result['value'] = instance_list
+#			print '[debug] ' + str(instance_list)
+			print '[debug] getInstance called'
 		else:
 			result['result'] = False
 			result['value'] = 'Cannot find policy with id: ' + policy_id
+			print '[debug] ' + result['value']
 
-		print instance_list
 		return json.dumps(result)
 
 	def _sort_by_distance(self, instance_list, client_ip):

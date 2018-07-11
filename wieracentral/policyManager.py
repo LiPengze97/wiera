@@ -13,6 +13,11 @@ class PolicyManager:
 	
 	def add_new_policy(self, wiera, policy_spec):
 #		if policy_id not in self.policies:
+		wiera_id = policy_spec['id']
+
+		if wiera_id in self.policies:
+			return self.policies[wiera_id]
+
 		new_policy = policy.Policy(wiera, policy_spec)
 		new_policy_id = new_policy.get_policy_id()
 		self.policies[new_policy_id] = new_policy

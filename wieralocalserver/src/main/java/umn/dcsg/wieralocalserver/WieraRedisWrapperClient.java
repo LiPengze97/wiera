@@ -28,8 +28,8 @@ public class WieraRedisWrapperClient {
 	int m_nWieraPort;
 	boolean m_bInitialized = false;
 	JSONArray m_wieraInstanceList = null;
-	//RedisWrapperApplicationIface.LocalInstanceClient m_wieraRedisClient;
-	ThriftClientPool m_clientPool;// = new ThriftClientPool(strPeerIP, nPeerPort, 6,PeerInstanceIface.LocalInstanceClient.class);
+	//RedisWrapperApplicationIface.LocalInstanceCLI m_wieraRedisClient;
+	ThriftClientPool m_clientPool;// = new ThriftClientPool(strPeerIP, nPeerPort, 6,PeerInstanceIface.LocalInstanceCLI.class);
 
 	public WieraRedisWrapperClient(String strWieraIP, int nWieraPort, String strWieraID) {
 		m_strWieraIP = strWieraIP;
@@ -54,7 +54,7 @@ public class WieraRedisWrapperClient {
 		if (wiera_client != null) {
 			String strResult = null;
 			try {
-				strResult = wiera_client.getInstances(m_strWieraID);
+				strResult = wiera_client.getWieraInstance(m_strWieraID);
 
 				//This will contain list of LocalInstance instance as a JsonObject
 				JSONObject res = new JSONObject(strResult);
@@ -235,7 +235,6 @@ public class WieraRedisWrapperClient {
 		//Result
 		try {
 			String strRet = client.zadd(req.toString());
-
 			JSONObject ret = new JSONObject(strRet);
 
 			if ((boolean) ret.get(Constants.RESULT) == true) {

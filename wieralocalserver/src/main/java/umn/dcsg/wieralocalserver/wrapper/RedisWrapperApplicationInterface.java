@@ -2,6 +2,7 @@ package umn.dcsg.wieralocalserver.wrapper;
 
 import com.google.gson.Gson;
 import com.google.gson.reflect.TypeToken;
+import org.apache.commons.codec.binary.Base64;
 import umn.dcsg.wieralocalserver.Constants;
 import umn.dcsg.wieralocalserver.LocalInstance;
 import umn.dcsg.wieralocalserver.info.Latency;
@@ -15,10 +16,12 @@ import java.lang.reflect.Type;
 import java.nio.ByteBuffer;
 import java.util.*;
 
+import static umn.dcsg.wieralocalserver.Constants.*;
+
 /**
  * Created by Kwangsung on 1/30/2017.
  */
-//LocalInstanceClient library for wrapping class
+//LocalInstanceCLI library for wrapping class
 //If only function can be done with single communication, it is handled only with get/put
 //If not, Wiera side fuction provided.
 public class RedisWrapperApplicationInterface implements RedisWrapperApplicationIface.Iface {
@@ -29,7 +32,7 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 	}
 
 	private ArrayList<String> getListByKey(String strKey) throws TException {
-		ArrayList list = null;
+		ArrayList list;
 
 		try {
 			//For reqeust
@@ -37,20 +40,24 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 			Type setType = new TypeToken<ArrayList>() {
 			}.getType();
 
-			ByteBuffer received = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+			//Result
+			ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+			JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
 
-			//Return
-			byte[] result = received.array();
+			boolean bRet = obj.getBoolean(RESULT);
 
-			if (result.length > 0) {
-				String strJson = new String(result);
+			if(bRet == true) {
+				//Return
+				byte[] ret = Base64.decodeBase64((String) obj.get(VALUE));;
+				String strJson = new String(ret);
 				list = gson.fromJson(strJson, setType);
+				return list;
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
 
-		return list;
+		return null;
 	}
 
 	private Set<String> getSetByKey(String strKey) throws TException {
@@ -61,13 +68,14 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 			Type setType = new TypeToken<Set>() {
 			}.getType();
 
-			ByteBuffer received = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+			ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+			JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
 
-			//Return
-			byte[] result = received.array();
+			boolean bRet = obj.getBoolean(RESULT);
+			byte[] value = Base64.decodeBase64((String) obj.get(VALUE));;
 
-			if (result.length > 0) {
-				String strJson = new String(result);
+			if (bRet == true && value.length > 0) {
+				String strJson = new String(value);
 				set = gson.fromJson(strJson, setType);
 			}
 		} catch (Exception e) {
@@ -80,7 +88,7 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 	@Override
 	public String get(String strRequest) throws TException {
 		JSONObject req = new JSONObject(strRequest);
-		String strKey = (String) req.get(Constants.KEY);
+		String strKey = (String) req.get(KEY);
 
 		//Return
 		JSONObject ret = new JSONObject();
@@ -88,11 +96,11 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 		byte[] result = received.array();
 
 		if (result.length > 0) {
-			ret.put(Constants.RESULT, true);
-			ret.put(Constants.VALUE, new String(result));
+			ret.put(RESULT, true);
+			ret.put(VALUE, new String(result));
 		} else {
-			ret.put(Constants.RESULT, false);
-			ret.put(Constants.VALUE, "Failed.");
+			ret.put(RESULT, false);
+			ret.put(VALUE, "Failed.");
 		}
 
 		return ret.toString();
@@ -101,19 +109,24 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 	@Override
 	public String put(String strRequest) throws TException {
 		JSONObject req = new JSONObject(strRequest);
-		String strKey = (String) req.get(Constants.KEY);
-		String strValue = (String) req.get(Constants.VALUE);
+		String strKey = (String) req.get(KEY);
+		String strValue = (String) req.get(VALUE);
+
+		//Result
+		ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(strValue.getBytes()));
+		JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
 
 		//Return
 		JSONObject ret = new JSONObject();
-		boolean bRet = m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(strValue.getBytes()));
+
+		boolean bRet = obj.getBoolean(RESULT);
 
 		if (bRet == true) {
-			ret.put(Constants.RESULT, true);
-			ret.put(Constants.VALUE, "OK");
+			ret.put(RESULT, true);
+			ret.put(VALUE, "OK");
 		} else {
-			ret.put(Constants.RESULT, false);
-			ret.put(Constants.VALUE, "Failed");
+			ret.put(RESULT, false);
+			ret.put(VALUE, "Failed");
 		}
 
 		return ret.toString();
@@ -125,13 +138,11 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 
 		try {
 			JSONObject req = new JSONObject(strRequest);
-			String strKey = (String) req.get(Constants.KEY);
-			String strValue = (String) req.get(Constants.VALUE);
+			String strKey = (String) req.get(KEY);
+			String strValue = (String) req.get(VALUE);
 
 			//Return
 			//JSONObject ret = new JSONObject();
-			ret.put(Constants.RESULT, true);
-
 			ArrayList list = getListByKey(strKey);
 
 			if (list == null) {
@@ -142,9 +153,20 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 
 			//Write Back
 			Gson gson = new Gson();
-			m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(gson.toJson(list).getBytes()));
-			ret.put(Constants.VALUE, list.size());
 
+			//Result
+			ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(gson.toJson(list).getBytes()));
+			JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
+
+			boolean bRet = obj.getBoolean(RESULT);
+
+			if (bRet == true) {
+				ret.put(RESULT, true);
+				ret.put(VALUE, list.size());
+			} else {
+				ret.put(RESULT, false);
+				ret.put(VALUE, 0);
+			}
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -156,7 +178,7 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 	public String lrange(String strRequest) throws TException {
 		//Return
 		JSONObject ret = new JSONObject();
-		ret.put(Constants.RESULT, true);
+		ret.put(RESULT, true);
 
 		try {
 			//For reqeust
@@ -166,12 +188,13 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 
 			//Reqeust
 			JSONObject req = new JSONObject(strRequest);
-			String strKey = (String) req.get(Constants.KEY);
-			long lFrom = Utils.convertToLong(req.get(Constants.VALUE));
-			long lTo = Utils.convertToLong(req.get(Constants.VALUE2));
+			String strKey = (String) req.get(KEY);
+			long lFrom = Utils.convertToLong(req.get(VALUE));
+			long lTo = Utils.convertToLong(req.get(VALUE2));
 
 			ArrayList oriList = getListByKey(strKey);
 			ArrayList list;
+			boolean bRet;
 
 			if (oriList != null) {
 				try {
@@ -179,11 +202,19 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 				} catch (Exception e) {
 					list = oriList;
 				}
+				bRet = true;
 			} else {
 				list = new ArrayList();
+				bRet = false;
 			}
 
-			ret.put(Constants.VALUE, gson.toJson(list));
+			if (bRet == true) {
+				ret.put(RESULT, true);
+			} else {
+				ret.put(RESULT, false);
+			}
+
+			ret.put(VALUE, gson.toJson(list));
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -199,33 +230,41 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 
 		//Reqeust
 		JSONObject req = new JSONObject(strRequest);
-		String strKey = (String) req.get(Constants.KEY);
+		String strKey = (String) req.get(KEY);
 
 		//Return
 		JSONObject ret = new JSONObject();
-		ret.put(Constants.RESULT, true);
 		long lCnt = 0;
 
 		ArrayList list = getListByKey(strKey);
+		boolean bRet;
 
 		if (list != null) {
 			lCnt = list.size();
+			bRet = true;
+		} else {
+			bRet = false;
 		}
 
-		ret.put(Constants.VALUE, lCnt);
+		if (bRet == true) {
+			ret.put(RESULT, true);
+		} else {
+			ret.put(RESULT, false);
+		}
+
+		ret.put(VALUE, lCnt);
 		return ret.toString();
 	}
 
 	@Override
 	public String sadd(String strRequest) throws TException {
 		JSONObject ret = new JSONObject();
-		ret.put(Constants.RESULT, true);
 
 		try {
 			//Reqeust
 			JSONObject req = new JSONObject(strRequest);
-			String strKey = (String) req.get(Constants.KEY);
-			String strValue = (String) req.get(Constants.VALUE);
+			String strKey = (String) req.get(KEY);
+			String strValue = (String) req.get(VALUE);
 
 			//Find the Set
 			Set<String> set = getSetByKey(strKey);
@@ -237,9 +276,19 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 			set.add(strValue);
 
 			//Write Back
+			//Result
 			Gson gson = new Gson();
-			boolean bRet = m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(gson.toJson(set).getBytes()));
-			ret.put(Constants.VALUE, set.size());
+			ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(gson.toJson(set).getBytes()));
+			JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
+
+			boolean bRet = obj.getBoolean(RESULT);
+
+			if (bRet == true) {
+				ret.put(RESULT, true);
+			} else {
+				ret.put(RESULT, false);
+			}
+			ret.put(VALUE, set.size());
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
@@ -250,12 +299,12 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 	@Override
 	public String srem(String strRequest) throws TException {
 		JSONObject req = new JSONObject(strRequest);
-		String strKey = (String) req.get(Constants.KEY);
-		String strValue = (String) req.get(Constants.VALUE);
+		String strKey = (String) req.get(KEY);
+		String strValue = (String) req.get(VALUE);
 
 		//Return
 		JSONObject ret = new JSONObject();
-		ret.put(Constants.RESULT, true);
+		ret.put(RESULT, true);
 
 		//Find the Set
 		Set<String> set = getSetByKey(strKey);
@@ -265,10 +314,20 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 
 			//Write Back
 			Gson gson = new Gson();
-			boolean bRet = m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(gson.toJson(set).getBytes()));
-			ret.put(Constants.VALUE, set.size());
+			ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(gson.toJson(set).getBytes()));
+			JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
+
+			boolean bRet = obj.getBoolean(RESULT);
+
+			if (bRet == true) {
+				ret.put(RESULT, true);
+			} else {
+				ret.put(RESULT, false);
+			}
+
+			ret.put(VALUE, set.size());
 		} else {
-			ret.put(Constants.VALUE, 0);
+			ret.put(VALUE, 0);
 		}
 
 		return ret.toString();
@@ -277,11 +336,11 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 	@Override
 	public String smembers(String strRequest) throws TException {
 		JSONObject req = new JSONObject(strRequest);
-		String strKey = (String) req.get(Constants.KEY);
+		String strKey = (String) req.get(KEY);
 
 		//Return
 		JSONObject ret = new JSONObject();
-		ret.put(Constants.RESULT, true);
+		ret.put(RESULT, true);
 
 		//Find the Set
 		Set<String> set = getSetByKey(strKey);
@@ -291,7 +350,7 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 		}
 
 		Gson gson = new Gson();
-		ret.put(Constants.VALUE, gson.toJson(set));
+		ret.put(VALUE, gson.toJson(set));
 
 		return ret.toString();
 	}
@@ -302,20 +361,20 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 
 		//Return
 		JSONObject ret = new JSONObject();
-		ret.put(Constants.RESULT, true);
+		ret.put(RESULT, true);
 
 		try {
 			JSONObject req = new JSONObject(strRequest);
-			String strKey = (String) req.get(Constants.KEY);
-			String strValue = (String) req.get(Constants.VALUE);
+			String strKey = (String) req.get(KEY);
+			String strValue = (String) req.get(VALUE);
 
 			//Find the Set
 			Set<String> set = getSetByKey(strKey);
 
 			if (set != null && set.contains(strValue) == true) {
-				ret.put(Constants.VALUE, 1);
+				ret.put(VALUE, 1);
 			} else {
-				ret.put(Constants.VALUE, 0);
+				ret.put(VALUE, 0);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -327,19 +386,19 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 	@Override
 	public String scard(String strRequest) throws TException {
 		JSONObject req = new JSONObject(strRequest);
-		String strKey = (String) req.get(Constants.KEY);
+		String strKey = (String) req.get(KEY);
 
 		//Return
 		JSONObject ret = new JSONObject();
-		ret.put(Constants.RESULT, true);
+		ret.put(RESULT, true);
 
 		//Find the Set
 		Set<String> set = getSetByKey(strKey);
 
 		if (set != null) {
-			ret.put(Constants.VALUE, set.size());
+			ret.put(VALUE, set.size());
 		} else {
-			ret.put(Constants.VALUE, 0);
+			ret.put(VALUE, 0);
 		}
 
 		return ret.toString();
@@ -350,17 +409,21 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 		//	System.out.println("incr");
 		//Reqeust
 		JSONObject req = new JSONObject(strRequest);
-		String strKey = (String) req.get(Constants.KEY);
+		String strKey = (String) req.get(KEY);
 
 		//Return
 		JSONObject ret = new JSONObject();
-		ret.put(Constants.RESULT, true);
-		ByteBuffer received = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
-		byte[] result = received.array();
+		ret.put(RESULT, true);
+
+		ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+		JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
+
+		boolean bRet = obj.getBoolean(RESULT);
+		byte[] value = Base64.decodeBase64((String) obj.get(VALUE));
 		long lNum = 0;
 
-		if (result.length > 0) {
-			lNum = Long.parseLong(new String(result));
+		if (bRet == true && value.length > 0) {
+			lNum = Long.parseLong(new String(value));
 		} else {
 			lNum = 0;
 		}
@@ -368,29 +431,31 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 		lNum++;
 
 		//Write Back
-		m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(new Long(lNum).toString().getBytes()));
-		ret.put(Constants.VALUE, lNum);
+		result = m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(new Long(lNum).toString().getBytes()));
+		ret.put(VALUE, lNum);
 		return ret.toString();
 	}
 
 	@Override
 	public String exists(String strRequest) throws TException {
 		JSONObject ret = new JSONObject();
-		ret.put(Constants.RESULT, true);
+		ret.put(RESULT, true);
 
 		try {
 			//Reqeust
 			JSONObject req = new JSONObject(strRequest);
-			String strKey = (String) req.get(Constants.KEY);
+			String strKey = (String) req.get(KEY);
 
 			//Return
-			ByteBuffer received = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
-			byte[] result = received.array();
+			ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+			JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
 
-			if (result.length > 0) {
-				ret.put(Constants.VALUE, 1);
+			boolean bRet = obj.getBoolean(RESULT);
+
+			if (bRet == true) {
+				ret.put(VALUE, 1);
 			} else {
-				ret.put(Constants.VALUE, 0);
+				ret.put(VALUE, 0);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();
@@ -402,8 +467,8 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 	@Override
 	public String expire(String strRequest) throws TException {
 		JSONObject ret = new JSONObject();
-		ret.put(Constants.RESULT, false);
-		ret.put(Constants.VALUE, "Not supported yet");
+		ret.put(RESULT, false);
+		ret.put(VALUE, "Not supported yet");
 		return ret.toString();
 	}
 
@@ -414,19 +479,21 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 
 		//Reqeust
 		JSONObject req = new JSONObject(strRequest);
-		String strKey = (String) req.get(Constants.KEY);
+		String strKey = (String) req.get(KEY);
 
 		Latency opLat = new Latency();
 		opLat.start();
-		ByteBuffer received = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+
+		ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+		JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
+
 		opLat.stop();
 
 		//Return
 		JSONObject ret = new JSONObject();
-		ret.put(Constants.RESULT, true);
-		ret.put(Constants.VALUE, new String(received.array()));
+		ret.put(RESULT, true);
+		ret.put(VALUE, new String(Base64.decodeBase64((String) obj.get(VALUE))));
 
-		latency.stop();
 		System.out.printf("hgetAll : %.2f\n", latency.getLatencyInMills() - opLat.getLatencyInMills());
 
 		return ret.toString();
@@ -439,8 +506,8 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 
 		//Reqeust
 		JSONObject req = new JSONObject(strRequest);
-		String strKey = (String) req.get(Constants.KEY);
-		String strMap = (String) req.get(Constants.VALUE);
+		String strKey = (String) req.get(KEY);
+		String strMap = (String) req.get(VALUE);
 
 		//Return
 		JSONObject ret = new JSONObject();
@@ -448,13 +515,19 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 		Latency opLat = new Latency();
 		opLat.start();
 
-		if (m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(strMap.getBytes())) == true) {
-			ret.put(Constants.RESULT, true);
-			ret.put(Constants.VALUE, Constants.OK);
+		ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(strMap.getBytes()));
+		JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
+
+		boolean bRet = obj.getBoolean(RESULT);
+
+		if (bRet == true) {
+			ret.put(RESULT, true);
+			ret.put(VALUE, OK);
 		} else {
-			ret.put(Constants.RESULT, false);
-			ret.put(Constants.VALUE, "Exception occurs while put request.");
+			ret.put(RESULT, false);
+			ret.put(VALUE, "Exception occurs while put request.");
 		}
+
 		opLat.stop();
 
 		latency.stop();
@@ -470,8 +543,8 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 
 		//Reqeust
 		JSONObject req = new JSONObject(strRequest);
-		String strKey = (String) req.get(Constants.KEY);
-		String strFields = (String) req.get(Constants.VALUE);
+		String strKey = (String) req.get(KEY);
+		String strFields = (String) req.get(VALUE);
 
 		Gson gson = new Gson();
 		Type type = new TypeToken<ArrayList<String>>() {
@@ -487,16 +560,21 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 
 		Latency opLat = new Latency();
 		opLat.start();
-		ByteBuffer received = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+
+		ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+		JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
+
 		opLat.stop();
+
+		boolean bRet = obj.getBoolean(RESULT);
+		byte[] value = Base64.decodeBase64((String) obj.get(VALUE));
 
 		//Return
 		JSONObject ret = new JSONObject();
-		byte[] result = received.array();
-		ret.put(Constants.RESULT, true);
+		ret.put(RESULT, true);
 
-		if (result.length > 0) {
-			String strJson = new String(result);
+		if (bRet == true && value.length > 0) {
+			String strJson = new String(value);
 			hash = gson.fromJson(strJson, mapType);
 
 			for (String field : fields) {
@@ -504,7 +582,7 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 			}
 		}
 
-		ret.put(Constants.VALUE, gson.toJson(ret_list));
+		ret.put(VALUE, gson.toJson(ret_list));
 
 		latency.stop();
 		System.out.printf("hmget : %.2f\n", latency.getLatencyInMills() - opLat.getLatencyInMills());
@@ -524,27 +602,30 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 		try {
 			//Reqeust
 			JSONObject req = new JSONObject(strRequest);
-			String strKey = (String) req.get(Constants.KEY);
-			double dbScore = Utils.convertToDouble(req.get(Constants.VALUE));
-			String strMember = (String) req.get(Constants.VALUE2);
+			String strKey = (String) req.get(KEY);
+			double dbScore = Utils.convertToDouble(req.get(VALUE));
+			String strMember = (String) req.get(VALUE2);
 
 			//Get sortedMap First
-
 			opLat.start();
-			ByteBuffer received = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+
+			ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+			JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
 			opLat.stop();
 
+			boolean bRet = obj.getBoolean(RESULT);
+			byte[] value = Base64.decodeBase64((String) obj.get(VALUE));
+
 			//Return
-			byte[] result = received.array();
-			ret.put(Constants.RESULT, true);
+			ret.put(RESULT, true);
 
 			Gson gson = new Gson();
 			Type type = new TypeToken<DualTreeBidiMap<Double, String>>() {
 			}.getType();
 			DualTreeBidiMap map;
 
-			if (result.length > 0) {
-				String strJson = new String(result);
+			if (bRet == true && value.length > 0) {
+				String strJson = new String(value);
 				map = gson.fromJson(strJson, type);
 
 				if (map.containsValue(strMember) == true) {
@@ -567,7 +648,7 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 			e.printStackTrace();
 		}
 
-		ret.put(Constants.VALUE, lRet);
+		ret.put(VALUE, lRet);
 
 		latency.stop();
 		System.out.printf("zadd : %.2f\n", latency.getLatencyInMills() - op2Lat.getLatencyInMills() - opLat.getLatencyInMills());
@@ -588,27 +669,30 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 
 		//Reqeust
 		JSONObject req = new JSONObject(strRequest);
-		String strKey = (String) req.get(Constants.KEY);
-		String strMembers = (String) req.get(Constants.VALUE2);
+		String strKey = (String) req.get(KEY);
+		String strMembers = (String) req.get(VALUE2);
 		ArrayList<String> memberList = gson.fromJson(strMembers, listType);
 
 		//Get sortedMap First
 		opLat.start();
-		ByteBuffer received = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+		ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+		JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
 		opLat.stop();
 
 		//Return
 		JSONObject ret = new JSONObject();
-		byte[] result = received.array();
-		ret.put(Constants.RESULT, true);
+		boolean bRet = obj.getBoolean(RESULT);
+		byte[] value = Base64.decodeBase64((String) obj.get(VALUE));
+
+		ret.put(RESULT, true);
 
 		Type mapType = new TypeToken<DualTreeBidiMap<Double, String>>() {
 		}.getType();
 		DualTreeBidiMap map;
 		long lRet = 0;
 
-		if (result.length > 0) {
-			String strJson = new String(result);
+		if (bRet == true && value.length > 0) {
+			String strJson = new String(value);
 			map = gson.fromJson(strJson, mapType);
 
 			for (String strMember : memberList) {
@@ -623,7 +707,7 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 			op2Lat.stop();
 		}
 
-		ret.put(Constants.VALUE, lRet);
+		ret.put(VALUE, lRet);
 
 		latency.stop();
 		System.out.printf("zrem : %.2f\n", latency.getLatencyInMills() - op2Lat.getLatencyInMills() - opLat.getLatencyInMills());
@@ -637,39 +721,43 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 
 		//Reqeust
 		JSONObject req = new JSONObject(strRequest);
-		String strKey = (String) req.get(Constants.KEY);
-		double dbMin = Utils.convertToDouble(req.get(Constants.VALUE2));
-		double dbMax = Utils.convertToDouble(req.get(Constants.VALUE3));
-		long lOffset = Utils.convertToLong(req.get(Constants.VALUE4));
-		long lCount = Utils.convertToLong(req.get(Constants.VALUE5));
+		String strKey = (String) req.get(KEY);
+		double dbMin = Utils.convertToDouble(req.get(VALUE2));
+		double dbMax = Utils.convertToDouble(req.get(VALUE3));
+		long lOffset = Utils.convertToLong(req.get(VALUE4));
+		long lCount = Utils.convertToLong(req.get(VALUE5));
 
 		//Get sortedMap First
 		Latency opLat = new Latency();
 		opLat.start();
-		ByteBuffer received = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+
+		ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.get(strKey);
+		JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
 		opLat.stop();
+
+		boolean bRet = obj.getBoolean(RESULT);
+		byte[] value = Base64.decodeBase64((String) obj.get(VALUE));
 
 		//Return
 		JSONObject ret = new JSONObject();
-		byte[] result = received.array();
-		ret.put(Constants.RESULT, true);
+
+		ret.put(RESULT, true);
 
 		Gson gson = new Gson();
 		Type type = new TypeToken<DualTreeBidiMap<Double, String>>() {
 		}.getType();
 		DualTreeBidiMap map;
-		long lRet = 0;
 		Set<String> retSet;
 
-		if (result.length > 0) {
-			String strJson = new String(result);
+		if (bRet == true && value.length > 0) {
+			String strJson = new String(value);
 			map = gson.fromJson(strJson, type);
 			retSet = map.subMap(dbMin, dbMax).keySet();
 		} else {
 			retSet = Collections.emptySet();
 		}
 
-		ret.put(Constants.VALUE, gson.toJson(retSet));
+		ret.put(VALUE, gson.toJson(retSet));
 
 		latency.stop();
 		System.out.printf("zrangeByScore : %.2f\n", latency.getLatencyInMills() - opLat.getLatencyInMills());
@@ -682,18 +770,22 @@ public class RedisWrapperApplicationInterface implements RedisWrapperApplication
 
 		//Reqeust
 		JSONObject req = new JSONObject(strRequest);
-		String strKey = (String) req.get(Constants.KEY);
+		String strKey = (String) req.get(KEY);
 
 		//Return
 		JSONObject ret = new JSONObject();
 
 		try {
-			if (m_localInstance.m_applicationToLocalInstanceInterface.remove(strKey) == true) {
-				ret.put(Constants.RESULT, true);
-				ret.put(Constants.VALUE, 1);
+			ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.remove(strKey);
+			JSONObject obj = new JSONObject(new String(result.array(), result.position(), result.remaining()));
+			boolean bRet = obj.getBoolean(RESULT);
+
+			if (bRet == true) {
+				ret.put(RESULT, true);
+				ret.put(VALUE, 1);
 			} else {
-				ret.put(Constants.RESULT, false);
-				ret.put(Constants.VALUE, 0);
+				ret.put(RESULT, false);
+				ret.put(VALUE, 0);
 			}
 		} catch (Exception e) {
 			e.printStackTrace();

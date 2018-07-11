@@ -47,6 +47,16 @@ public class WieraInstanceTierInterface extends StorageInterface {
 	}
 
 	@Override
+	public boolean rename(String oldKey, String newKey) {
+		return false;
+	}
+
+	@Override
+	public boolean copy(String oldKey, String newKey) {
+		return false;
+	}
+
+	@Override
 	public boolean delete(String key) {
 /*
 		try
@@ -63,12 +73,12 @@ public class WieraInstanceTierInterface extends StorageInterface {
 	}
 
 	@Override
-	protected boolean growTier(int byPercent) {
+	public boolean growTier(int byPercent) {
 		return false;
 	}
 
 	@Override
-	protected boolean shrinkTier(int byPercent) {
+	public boolean shrinkTier(int byPercent) {
 		return false;
 	}
 

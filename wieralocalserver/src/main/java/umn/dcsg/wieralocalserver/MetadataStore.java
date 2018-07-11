@@ -32,7 +32,7 @@ public class MetadataStore {
 	private SecondaryIndex<String, String, MetaObjectInfo> m_objectSIndexTags = null;
 	private SecondaryIndex<Long, String, MetaObjectInfo> m_objectSIndexAccessTime = null;
 
-	//Index for storage (currenlty used only for storage size)
+	//Index for storage (currently used only for storage size)
 	private PrimaryIndex<String, DBStorage> m_storagePIndex = null;
 
 	private String envHome = null;
@@ -92,7 +92,7 @@ public class MetadataStore {
 		m_objectPIndex.put(obj);
 	}
 
-	// By default this method uses the primary key to retrieve an objec
+	// By default this method uses the primary key to retrieve an object
 	protected MetaObjectInfo getObject(String key) {
 		return m_objectPIndex.get(key);
 	}
@@ -113,7 +113,7 @@ public class MetadataStore {
 
 		try {
 			for (MetaObjectInfo obj : entityCursor) {
-				//Check whether it is cold or not
+				//Check whether it is dirty or not
 
 				if (obj.isDirty() == true) {
 					if (obj.getLocaleList().containsKey(targetLocale.getLocaleID())) {

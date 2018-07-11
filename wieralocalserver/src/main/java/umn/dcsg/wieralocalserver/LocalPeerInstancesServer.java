@@ -25,8 +25,8 @@ public class LocalPeerInstancesServer implements Runnable {
 			LocalInstanceToPeerInterface peerInterface = new LocalInstanceToPeerInterface(m_peerInstanceManager.m_instance);
 			LocalInstanceToPeerIface.Processor processor = new LocalInstanceToPeerIface.Processor(peerInterface);
 			m_thriftServer = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport)
-					.minWorkerThreads(64) // TODO Take this as arguments from user
-					.maxWorkerThreads(256) // TODO Take this as arguments from user
+					.minWorkerThreads(128)
+					.maxWorkerThreads(512)
 					.inputTransportFactory(transportFactory)
 					.outputTransportFactory(transportFactory)
 					.inputProtocolFactory(tProtocolFactory)

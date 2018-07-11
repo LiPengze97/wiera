@@ -131,6 +131,16 @@ public class GoogleCloudStorageInterface extends StorageInterface
 		return value;
 	}
 
+	@Override
+	public boolean rename(String oldKey, String newKey) {
+		return false;
+	}
+
+	@Override
+	public boolean copy(String oldKey, String newKey) {
+		return false;
+	}
+
 	public boolean delete(String key)
 	{
 		try
@@ -147,13 +157,13 @@ public class GoogleCloudStorageInterface extends StorageInterface
 	}
 
 	@Override
-	protected boolean growTier(int byPercent)
+	public boolean growTier(int byPercent)
 	{
 		return true;
 	}
 
 	@Override
-	protected boolean shrinkTier(int byPercent)
+	public boolean shrinkTier(int byPercent)
 	{
 		return true;
 	}

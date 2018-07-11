@@ -14,7 +14,9 @@ import java.io.PrintWriter;
 import java.io.UnsupportedEncodingException;
 import java.lang.reflect.Type;
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentLinkedDeque;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -30,34 +32,34 @@ public class Metrics {
     //StorageTiername and latency for each storage
     //This will be shared with other instances //Last 10 operation?
     //StorageTierName, operation_type (put, get), latencies
-    private HashMap<String, HashMap<String, ConcurrentLinkedDeque<Latency>>> m_localTiersLatencyInfo;
+    private Map<String, Map<String, ConcurrentLinkedDeque<Latency>>> m_localTiersLatencyInfo;
 
     //Tier violation time_checker.
     //For both remote and local
-    private HashMap<String, HashMap<String, Long>> m_tiersViolationPeriodInfo;
+    private Map<String, Map<String, Long>> m_tiersViolationPeriodInfo;
 
     //Latency for the operation with distribution type including lock, distribution, and local operation
     //May not be used for now
     //Operations (put and get), latencies info (Operation, Lock, distribution)
-    private HashMap<String, ConcurrentLinkedDeque<OperationLatency>> m_operationLatencyInfo;
+    private Map<String, ConcurrentLinkedDeque<OperationLatency>> m_operationLatencyInfo;
 
     //Network Latency from local instance
-    private HashMap<String, ConcurrentLinkedDeque<Latency>> m_betweenDCsLatenciesInfo;
+    private Map<String, ConcurrentLinkedDeque<Latency>> m_betweenDCsLatenciesInfo;
 
     //This will be updated by ping in peermanager
     //Hostname, TierName, value (put_latency, get_latency, free_space)
-    private HashMap<String, HashMap<String, HashMap<String, Double>>> m_remoteTiersInfo;
-    private HashMap<String, HashMap<String, Double>> m_remoteNetworkInfo;
-    private HashMap<String, HashMap<String, Long>> m_remoteAccessInfo;
+    private Map<String, Map<String, Map<String, Double>>> m_remoteTiersInfo;
+    private Map<String, Map<String, Double>> m_remoteNetworkInfo;
+    private Map<String, Map<String, Long>> m_remoteAccessInfo;
 
     //From Where, To where, Cost/GB
-    private HashMap<String, HashMap<String, Double>> m_networkCostInformation;
+    private Map<String, Map<String, Double>> m_networkCostInformation;
 
     //Target DC, Target Storage, Pricing Item, and Cost.
-    private HashMap<String, HashMap<String, HashMap<String, Double>>> m_storageCostInformation;
+    private Map<String, Map<String, Map<String, Double>>> m_storageCostInformation;
 
     //Todo This is only for Wiera Journal version. (latency with only Hostname)
-    private HashMap<String, ConcurrentLinkedDeque<Latency>> m_remoteInstanceWriteLatency;
+    private Map<String, ConcurrentLinkedDeque<Latency>> m_remoteInstanceWriteLatency;
 
     //Applications SLA Information
     //SLA goals
@@ -73,26 +75,26 @@ public class Metrics {
     public LocalInstance m_localInstance;
 
     //Thread for checking latency for local tier. -> Free except S3
-    public HashMap<String, HashMap<String, HashMap<String, Double>>> getRemoteTiers() {
+    public Map<String, Map<String, Map<String, Double>>> getRemoteTiers() {
         return m_remoteTiersInfo;
     }
 
-    public HashMap<String, HashMap<String, ConcurrentLinkedDeque<Latency>>> getLocalTiers() {
+    public Map<String, Map<String, ConcurrentLinkedDeque<Latency>>> getLocalTiers() {
         return m_localTiersLatencyInfo;
     }
 
     //For cost information.
     //Write from this instance here to Locale (including forwarding and broadcasting)
-    protected static HashMap<Locale, AtomicInteger> m_getCntForCost = new HashMap<>();
-    protected static HashMap<Locale, AtomicInteger> m_putCntForCost = new HashMap<>();
+    protected static Map<Locale, AtomicInteger> m_getCntForCost = new ConcurrentHashMap<>();
+    protected static Map<Locale, AtomicInteger> m_putCntForCost = new ConcurrentHashMap<>();
 
     //for Requests count only from applications
-    protected static LinkedList<Long> m_putRequests = new LinkedList<>();
-    protected static LinkedList<Long> m_getRequests = new LinkedList<>();
+    protected static LinkedBlockingDeque<Long> m_putRequests = new LinkedBlockingDeque<>();
+    protected static LinkedBlockingDeque<Long> m_getRequests = new LinkedBlockingDeque<>();
 
     //For forwarded requests from other peers
-    protected static Map<String, LinkedList<Long>> m_getForwaredRquests = new HashMap<String, LinkedList<Long>>();
-    protected static Map<String, LinkedList<Long>> m_putForwaredRquests = new HashMap<String, LinkedList<Long>>();
+    protected static Map<String, LinkedBlockingDeque<Long>> m_getForwaredRquests = new ConcurrentHashMap<String, LinkedBlockingDeque<Long>>();
+    protected static Map<String, LinkedBlockingDeque<Long>> m_putForwaredRquests = new ConcurrentHashMap<String, LinkedBlockingDeque<Long>>();
 
     public Metrics(LocalInstance localInstance) {
         m_localInstance = localInstance;
@@ -103,16 +105,16 @@ public class Metrics {
         ConcurrentLinkedDeque list;
         long lStart = 0;
         long lExpectedLatency = 0;
-        m_localTiersLatencyInfo = new HashMap<String, HashMap<String, ConcurrentLinkedDeque<Latency>>>();
+        m_localTiersLatencyInfo = new ConcurrentHashMap<String, Map<String, ConcurrentLinkedDeque<Latency>>>();
 
         //For checking tier latency violation.
-        m_tiersViolationPeriodInfo = new HashMap<>();
+        m_tiersViolationPeriodInfo = new ConcurrentHashMap<>();
 
-        m_tiersViolationPeriodInfo.put(GET_LATENCY, new HashMap<String, Long>());
-        m_tiersViolationPeriodInfo.put(PUT_LATENCY, new HashMap<String, Long>());
+        m_tiersViolationPeriodInfo.put(GET_LATENCY, new ConcurrentHashMap<String, Long>());
+        m_tiersViolationPeriodInfo.put(PUT_LATENCY, new ConcurrentHashMap<String, Long>());
 
         for (String strTierName : m_localInstance.m_tiers.m_tierManagerByName.keySet()) {
-            HashMap<String, ConcurrentLinkedDeque<Latency>> operationMap = new HashMap<String, ConcurrentLinkedDeque<Latency>>();
+            ConcurrentHashMap<String, ConcurrentLinkedDeque<Latency>> operationMap = new ConcurrentHashMap<String, ConcurrentLinkedDeque<Latency>>();
 
             //For the first operation->Get pseudo (expected) latency
             lExpectedLatency = m_localInstance.m_tiers.m_tierManagerByName.get(strTierName).getExpectedLatency();
@@ -134,36 +136,36 @@ public class Metrics {
         }
 
         //This will store the whole time for handling operation (including time for lock, distribution, and operation)
-        m_operationLatencyInfo = new HashMap<String, ConcurrentLinkedDeque<OperationLatency>>();
+        m_operationLatencyInfo = new ConcurrentHashMap<String, ConcurrentLinkedDeque<OperationLatency>>();
         m_operationLatencyInfo.put(GET_LATENCY, new ConcurrentLinkedDeque<OperationLatency>());
         m_operationLatencyInfo.put(PUT_LATENCY, new ConcurrentLinkedDeque<OperationLatency>());
 
         //Network latency between instance (Can be moved to LocalInstance Server)
-        m_betweenDCsLatenciesInfo = new HashMap<String, ConcurrentLinkedDeque<Latency>>();
+        m_betweenDCsLatenciesInfo = new ConcurrentHashMap<String, ConcurrentLinkedDeque<Latency>>();
 
         //This stores other instances storages information retrieved by ping
         //Contains average latency for each storage and free-space
-        m_remoteTiersInfo = new HashMap<String, HashMap<String, HashMap<String, Double>>>();
+        m_remoteTiersInfo = new ConcurrentHashMap<String, Map<String, Map<String, Double>>>();
 
         //Periodically check DCs latencies for finding centralized DC for Cluster mode
-        m_remoteNetworkInfo = new HashMap<String, HashMap<String, Double>>();
+        m_remoteNetworkInfo = new ConcurrentHashMap<String, Map<String, Double>>();
 
         //Periodically check access pattern of peers (in set period)
-        m_remoteAccessInfo = new HashMap<String, HashMap<String, Long>>();
+        m_remoteAccessInfo = new ConcurrentHashMap<String, Map<String, Long>>();
 
         //Update pricing information when register to Wiera
         //From where to where cost/GB
-        m_networkCostInformation = new HashMap<String, HashMap<String, Double>>();
+        m_networkCostInformation = new ConcurrentHashMap<String, Map<String, Double>>();
 
         //Target DC, Target Storage, Pricing Item, and Cost.
-        m_storageCostInformation = new HashMap<String, HashMap<String, HashMap<String, Double>>>();
+        m_storageCostInformation = new ConcurrentHashMap<String, Map<String, Map<String, Double>>>();
 
         //Keep updating local storage latency
         m_tierLatencyMonitor = new TierLatencyMonitor(this);
         m_tierLatencyMonitor.startMonitoring();
 
         //Todo Will be used for Wiera Journal paper
-        m_remoteInstanceWriteLatency = new HashMap<String, ConcurrentLinkedDeque<Latency>>();
+        m_remoteInstanceWriteLatency = new ConcurrentHashMap<String, ConcurrentLinkedDeque<Latency>>();
     }
 
     public void setGoals(JSONObject goals) {
@@ -186,7 +188,7 @@ public class Metrics {
         JSONObject jsonHost;
         JSONObject jsonList;
         JSONObject jsonTierItems;
-        Type type = new TypeToken<HashMap<String, Double>>() {
+        Type type = new TypeToken<ConcurrentHashMap<String, Double>>() {
         }.getType();
         Gson gson = new Gson();
 
@@ -194,7 +196,7 @@ public class Metrics {
             for (String strTargetHostName : costInfo.keySet()) {
                 jsonHost = (JSONObject) costInfo.get(strTargetHostName);
                 jsonList = (JSONObject) jsonHost.get(NETWORK_COST);
-                HashMap<String, Double> networkCost = gson.fromJson(jsonList.toString(), type);
+                ConcurrentHashMap<String, Double> networkCost = gson.fromJson(jsonList.toString(), type);
 
                 //Set network cost
                 m_networkCostInformation.put(strTargetHostName, networkCost);
@@ -203,11 +205,11 @@ public class Metrics {
                 jsonList = (JSONObject) jsonHost.get(STORAGE_COST);
 
                 //For Storage Tier
-                HashMap<String, HashMap<String, Double>> storageCost = new HashMap<>();
+                ConcurrentHashMap<String, Map<String, Double>> storageCost = new ConcurrentHashMap<>();
 
                 for (String strTierName : jsonList.keySet()) {
                     jsonTierItems = (JSONObject) jsonList.get(strTierName);
-                    HashMap<String, Double> itemList = gson.fromJson(jsonTierItems.toString(), type);
+                    ConcurrentHashMap<String, Double> itemList = gson.fromJson(jsonTierItems.toString(), type);
                     storageCost.put(strTierName, itemList);
                 }
 
@@ -244,7 +246,7 @@ public class Metrics {
             return false;
         }
 
-        HashMap<String, ConcurrentLinkedDeque<Latency>> tierMap = m_localTiersLatencyInfo.get(strTierName);
+        Map<String, ConcurrentLinkedDeque<Latency>> tierMap = m_localTiersLatencyInfo.get(strTierName);
         ConcurrentLinkedDeque<Latency> list = tierMap.get(strOPType);
 
         if (tierMap == null) {
@@ -303,7 +305,7 @@ public class Metrics {
     public double getLocalTierLatency(String strTierName, String strOPType) {
         Latency latency;
         ConcurrentLinkedDeque<Latency> latencies;
-        HashMap<String, ConcurrentLinkedDeque<Latency>> mapType = m_localTiersLatencyInfo.get(strTierName);
+        Map<String, ConcurrentLinkedDeque<Latency>> mapType = m_localTiersLatencyInfo.get(strTierName);
         latencies = mapType.get(strOPType);
         Iterator iter = latencies.iterator();
         int nSize = latencies.size();
@@ -340,43 +342,43 @@ public class Metrics {
     //How to get this? With last 10 times? or With last 10mins?
     //This will be sent as JSON format for other instances
     //Hostname, info (put_latency, get_latency, free_space), Info (average_latency or free_space)
-    public HashMap<String, HashMap<String, Double>> getStorageInfo(boolean bIncludingFreeSpace) {
-        HashMap<String, HashMap<String, Double>> ret_info = new HashMap<String, HashMap<String, Double>>();
+    public Map<String, Map<String, Double>> getStorageInfo(boolean bIncludingFreeSpace) {
+        Map<String, Map<String, Double>> info = new ConcurrentHashMap<String, Map<String, Double>>();
 
         //Result
-        HashMap<String, Double> storage_info;
+        ConcurrentHashMap<String, Double> storageInfo;
 
         //Try to retrieve local tier itself information. (different from m_operationLatencyInfo)
         //m_operationLatencyInfo includes all time for lock, distribution and operation
         for (String strTierName : m_localTiersLatencyInfo.keySet()) {
             //Set Tiername as the first result
-            storage_info = new HashMap<String, Double>();
+            storageInfo = new ConcurrentHashMap<String, Double>();
 
             //getting free-space for each
             if (bIncludingFreeSpace == true) {
-                storage_info.put(FREE_SPACE, getLocalTierFreeSpace(strTierName));
+                storageInfo.put(FREE_SPACE, getLocalTierFreeSpace(strTierName));
             }
 
             //getting Get, Put latency
-            storage_info.put(PUT_LATENCY, getLocalTierLatency(strTierName, PUT_LATENCY));
-            storage_info.put(GET_LATENCY, getLocalTierLatency(strTierName, GET_LATENCY));
+            storageInfo.put(PUT_LATENCY, getLocalTierLatency(strTierName, PUT_LATENCY));
+            storageInfo.put(GET_LATENCY, getLocalTierLatency(strTierName, GET_LATENCY));
 
-            ret_info.put(strTierName, storage_info);
+            info.put(strTierName, storageInfo);
         }
 
-        return ret_info;
+        return info;
     }
 
-    public HashMap<String, Double> getDCsLatencyInfo() {
-        HashMap<String, Double> ret_info = new HashMap<String, Double>();
+    public ConcurrentHashMap<String, Double> getDCsLatencyInfo() {
+        ConcurrentHashMap<String, Double> latencyInfo = new ConcurrentHashMap<String, Double>();
 
         //Try to retrieve local tier itself information. (different from m_operationLatencyInfo)
         //m_operationLatencyInfo includes all time for lock, distribution and operation
         for (String strHostName : m_betweenDCsLatenciesInfo.keySet()) {
-            ret_info.put(strHostName, getNetworkLatency(strHostName));
+            latencyInfo.put(strHostName, getNetworkLatency(strHostName));
         }
 
-        return ret_info;
+        return latencyInfo;
     }
 
     public double getLargestNetworkLatency() {
@@ -427,7 +429,7 @@ public class Metrics {
     }
 
     public double getLargestRemoteNetworkLatency(String strRemoteHostName) {
-        HashMap<String, Double> latencyList = m_remoteNetworkInfo.get(strRemoteHostName);
+        Map<String, Double> latencyList = m_remoteNetworkInfo.get(strRemoteHostName);
         double dbLargest = 0;
 
         for (double latency : latencyList.values()) {
@@ -447,8 +449,8 @@ public class Metrics {
         }
     }
 
-    public HashMap<String, Double> getNetworkLatencyBetweenDCs() {
-        HashMap<String, Double> ret = new HashMap<String, Double>();
+    public Map<String, Double> getNetworkLatencyBetweenDCs() {
+        Map<String, Double> ret = new ConcurrentHashMap<String, Double>();
 
         for (String strHostName : m_betweenDCsLatenciesInfo.keySet()) {
             double latency = getNetworkLatency(strHostName);
@@ -464,22 +466,31 @@ public class Metrics {
     public void updatePeerInformation(String strHostName, String strStorageInfo, String strNetworkInfo, String strAccessInfo) {
         //Storage info
         Gson gson = new Gson();
-        Type type = new TypeToken<HashMap<String, HashMap<String, Double>>>() {
-        }.getType();
-        HashMap<String, HashMap<String, Double>> storageInfo = gson.fromJson(strStorageInfo, type);
-        m_remoteTiersInfo.put(strHostName, (HashMap) storageInfo);
+        Type type;
 
-        //Network Info
-        Type latencyType = new TypeToken<HashMap<String, Double>>() {
-        }.getType();
-        HashMap<String, Double> networkInfo = gson.fromJson(strNetworkInfo, latencyType);
-        m_remoteNetworkInfo.put(strHostName, networkInfo);
+        if(strStorageInfo != null) {
+            type = new TypeToken<ConcurrentHashMap<String, ConcurrentHashMap<String, Double>>>() {
+            }.getType();
+            Map<String, Map<String, Double>> storageInfo = gson.fromJson(strStorageInfo, type);
+            m_remoteTiersInfo.put(strHostName, storageInfo);
+        }
 
-        //Access Information (Put and Get Cnt)
-        Type accessType = new TypeToken<HashMap<String, Double>>() {
-        }.getType();
-        HashMap<String, Long> accessInfo = gson.fromJson(strAccessInfo, latencyType);
-        m_remoteAccessInfo.put(strHostName, accessInfo);
+        if(strNetworkInfo != null) {
+            //Network Info
+            type = new TypeToken<ConcurrentHashMap<String, Double>>() {
+            }.getType();
+
+            ConcurrentHashMap<String, Double> networkInfo = gson.fromJson(strNetworkInfo, type);
+            m_remoteNetworkInfo.put(strHostName, networkInfo);
+        }
+
+        if(strAccessInfo != null) {
+            //Access Information (Put and Get Cnt)
+            type = new TypeToken<ConcurrentHashMap<String, Double>>() {
+            }.getType();
+            ConcurrentHashMap<String, Long> accessInfo = gson.fromJson(strAccessInfo, type);
+            m_remoteAccessInfo.put(strHostName, accessInfo);
+        }
     }
 
     public long getLatestOperationTime(String strTierName, String strOP) {
@@ -498,8 +509,8 @@ public class Metrics {
     }
 
     public String getMonitoringData() {
-        HashMap<String, Double> network_data = getNetworkLatencyBetweenDCs();
-        HashMap<String, HashMap<String, Double>> storage_data = getStorageInfo(false);
+        Map<String, Double> network_data = getNetworkLatencyBetweenDCs();
+        Map<String, Map<String, Double>> storage_data = getStorageInfo(false);
 
         JSONObject latencyData = new JSONObject();
         latencyData.put(NETWORK_LATENCY, network_data);
@@ -605,22 +616,22 @@ public class Metrics {
     }
 
     //This function will be called in primary for TripS to send access pattern to TripS as a parameter
-    public HashMap<String, HashMap<String, Long>> getAllAccessInfoFrom(long lCheckFrom) {
+    public Map<String, Map<String, Long>> getAllAccessInfoFrom(long lCheckFrom) {
         long lCheckPeriod = System.currentTimeMillis() - lCheckFrom;
-        HashMap<String, Long> localAccessInfo = getLocalAccessInfo(lCheckPeriod, m_lCheckPeriod);
+        Map<String, Long> localAccessInfo = getLocalAccessInfo(lCheckPeriod, m_lCheckPeriod);
 
         m_remoteAccessInfo.put(LocalServer.getHostName(), localAccessInfo);
         return m_remoteAccessInfo;
     }
 
-    public HashMap<String, Integer> getLatestForwaredCnt() {
+    public Map<String, Integer> getLatestForwaredCnt() {
         return getForwaredCnt(0, m_lCheckPeriod);
     }
 
     //This function for other peer (sending this to others)
-    public HashMap<String, Integer> getForwaredCnt(long lFrom, long lPeriod) {
+    public Map<String, Integer> getForwaredCnt(long lFrom, long lPeriod) {
         long lCurTime = System.currentTimeMillis() - lFrom;
-        HashMap<String, Integer> accessInfo = new HashMap<>();
+        Map<String, Integer> accessInfo = new ConcurrentHashMap<>();
 
         accessInfo.put(GET_ACCESS_CNT, getForwardedGetReqCntInPeriod(lCurTime, lPeriod));
         accessInfo.put(PUT_ACCESS_CNT, getForwardedPutReqCntInPeriod(lCurTime, lPeriod));
@@ -628,14 +639,14 @@ public class Metrics {
         return accessInfo;
     }
 
-    public HashMap<String, Long> getLatestLocalAccessInfo() {
+    public Map<String, Long> getLatestLocalAccessInfo() {
         return getLocalAccessInfo(0, 90);
     }
 
     //This function for other peer (sending this to others)
-    public HashMap<String, Long> getLocalAccessInfo(long lFrom, long lPeriod) {
+    public Map<String, Long> getLocalAccessInfo(long lFrom, long lPeriod) {
         long lCurTime = System.currentTimeMillis() - lFrom;
-        HashMap<String, Long> accessInfo = new HashMap<>();
+        ConcurrentHashMap<String, Long> accessInfo = new ConcurrentHashMap<>();
 
         //Todo Should be removed
         //For test purpose
@@ -677,12 +688,12 @@ public class Metrics {
     }
 
     public void incrementalForwardedRequestCnt(String strHostname, String strOPType) {
-        LinkedList<Long> forwaredRequest;
+        LinkedBlockingDeque<Long> forwaredRequest;
 
         try {
             if (strOPType.compareTo(GET) == 0) {
                 if(m_getForwaredRquests.containsKey(strHostname) == false) {
-                    forwaredRequest = new LinkedList<>();
+                    forwaredRequest = new LinkedBlockingDeque<>();
                     m_getForwaredRquests.put(strHostname, forwaredRequest);
                 } else {
                     forwaredRequest = m_getForwaredRquests.get(strHostname);
@@ -690,7 +701,7 @@ public class Metrics {
 
             } else {
                 if(m_putForwaredRquests.containsKey(strHostname) == false) {
-                    forwaredRequest = new LinkedList<>();
+                    forwaredRequest = new LinkedBlockingDeque<>();
                     m_putForwaredRquests.put(strHostname, forwaredRequest);
                 } else {
                     forwaredRequest = m_putForwaredRquests.get(strHostname);
@@ -756,18 +767,23 @@ public class Metrics {
     }
 
 
-    public int findReqCntInPeriod(long lCurTime, LinkedList<Long> list, long lPeriodInSec) {
+    public int findReqCntInPeriod(long lCurTime, LinkedBlockingDeque<Long> list, long lPeriodInSec) {
         long lForwardedTime = 0;
         int nSize = list.size();
         long lElapse = 0;
 
-        for (int i = nSize - 1; i >= 0; i--) {
-            lForwardedTime = list.get(i);
+        int nCnt = 0;
+        Iterator<Long> it = list.iterator();
+
+        while(it.hasNext()) {
+            lForwardedTime = it.next();
             lElapse = lCurTime - lForwardedTime;
 
             if (lElapse > lPeriodInSec * 1000) {
-                return nSize - (i + 1);
+                return nSize - (nCnt + 1);
             }
+
+            nCnt++;
         }
 
         return nSize;
@@ -1059,7 +1075,7 @@ public class Metrics {
         return dbStorageCost;
     }
 
-    public HashMap<String, ConcurrentLinkedDeque<OperationLatency>> getOperationInfo() {
+    public Map<String, ConcurrentLinkedDeque<OperationLatency>> getOperationInfo() {
         return m_operationLatencyInfo;
     }
 

@@ -60,4 +60,9 @@ public class GrowResponse extends Response {
             responseParams.put(PERCENT, m_initParams.get(PERCENT));
         }
     }
+
+    @Override
+    public boolean doCheckResponseConditions(Map<String, Object> responseParams) {
+        return true;
+    }
 }

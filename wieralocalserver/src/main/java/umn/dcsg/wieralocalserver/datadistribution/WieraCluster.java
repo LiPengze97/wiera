@@ -95,7 +95,7 @@ public class WieraCluster
 				String strRemoteHostName = strTierName.split(":")[0];
 				String strRemoteTierName = strTierName.split(":")[1];
 
-				PeerInstanceIface.Client client = m_peersManager.getPeerClient(strRemoteHostName);
+				PeerInstanceIface.WieraClient client = m_peersManager.getPeerClient(strRemoteHostName);
 
 				if(client != null)
 				{
@@ -246,7 +246,7 @@ public class WieraCluster
 	{
 		if(m_leaderClient.m_bLeader == true)
 		{
-			PeerInstanceIface.LocalInstanceClient client = m_localInstance.m_peersManager.getPeerClient(strHostName);
+			PeerInstanceIface.LocalInstanceCLI client = m_localInstance.m_peersManager.getPeerClient(strHostName);
 
 			//Need to change to json object.
 			//Create JSONObject which will be sent to all peers.

@@ -1,6 +1,7 @@
 package umn.dcsg.wieralocalserver;
 
 import java.util.*;
+
 import com.sleepycat.persist.model.Entity;
 import com.sleepycat.persist.model.PrimaryKey;
 import com.sleepycat.persist.model.Relationship;
@@ -26,98 +27,120 @@ public class MetaObjectInfo {
     Set<Long> accessTime = null;
 
     public static final int LATEST_VERSION = 99999999;
+    public static final int NEW_VERSION = 0;
     public static final int NO_SUCH_VERSION = -1;
     public static final int NO_VERSIONING_SUPPORT = -2;
 
     MetaVerInfo m_latestMetaInfo;
     boolean m_pin = false;
-    int m_nLatestVer = NO_SUCH_VERSION;
     boolean m_bSupportVersioning = false;
     HashMap<Integer, MetaVerInfo> m_versions;
 
     public MetaObjectInfo() {
-        this("", "", "", TierInfo.TIER_TYPE.UNKNOWN, System.currentTimeMillis(), 0, "", false, false);
+        this("", System.currentTimeMillis(), 0, "", false, NO_VERSIONING_SUPPORT);
     }
 
-    //Local locale meta information
-    MetaObjectInfo(String key, String strTierName, TierInfo.TIER_TYPE initTierType, long size, String strTag, boolean bSupportVersioning) {
-        this(key, LocalServer.getHostName(), strTierName, initTierType, System.currentTimeMillis(), size, strTag, false, bSupportVersioning);
+    MetaObjectInfo(String key, long lSize, String strTag, int nVer) {
+        this(key, System.currentTimeMillis(), lSize, strTag, false, nVer);
     }
 
-    MetaObjectInfo(String key, String strHostName, String strTierName, TierInfo.TIER_TYPE initTierType, long size, String strTag, boolean bSupportVersioning) {
-        this(key, strHostName, strTierName, initTierType, System.currentTimeMillis(), size, strTag, false, bSupportVersioning);
-    }
-
-    MetaObjectInfo(String Key, String strHostName, String strTierName, TierInfo.TIER_TYPE initTierType, long startTime, long size, String strTag, boolean Pin, boolean bSupportVersioning) {
+    MetaObjectInfo(String strKey, long lStartTime, long lSize, String strTag, boolean bPin, int nVer) {
         //For each key.
-        m_key = Key;
-
-        //Object Info
-        m_latestMetaInfo = new MetaVerInfo(0, strHostName, strTierName, initTierType, System.currentTimeMillis(), size);
-        m_latestMetaInfo.m_lAccessCnt = 0;
-        m_latestMetaInfo.m_lStartTime = startTime;
-        m_latestMetaInfo.m_lLastAccessTime = startTime;
-        m_latestMetaInfo.m_lLastModifiedTime = 0;
-        m_latestMetaInfo.m_bDirty = false;
-        m_latestMetaInfo.m_bPin = Pin;
-        m_latestMetaInfo.m_lSize = size;
+        m_key = strKey;
 
         //Todo Need to be improved
-        m_bSupportVersioning = bSupportVersioning;
+        m_bSupportVersioning = nVer != NO_VERSIONING_SUPPORT;
 
-        if (m_bSupportVersioning == true) {
-            //Init version
-            m_nLatestVer = NO_SUCH_VERSION;
-            m_versions = new HashMap<>();
-        } else {
-            m_nLatestVer = NO_VERSIONING_SUPPORT;
+        if(m_bSupportVersioning == false) {
+            nVer = NEW_VERSION;
         }
 
+        //Object Info
+        MetaVerInfo meta = new MetaVerInfo(nVer, System.currentTimeMillis(), lSize);
+        meta.m_lAccessCnt = 0;
+        meta.m_lCreatedTime = lStartTime;
+        meta.m_lLastAccessTime = lStartTime;
+        meta.m_lLastModifiedTime = 0;
+        meta.m_bDirty = false;
+        meta.m_bPin = bPin;
+        meta.m_lSize = lSize;
+
+        if (m_bSupportVersioning == true) {
+            /*//Init version
+            m_nLatestVer = NEW_VERSION;*/
+            m_versions = new HashMap<>();
+            m_versions.put(nVer, meta);
+        } /*else {
+            m_nLatestVer = NO_VERSIONING_SUPPORT;
+        }*/
+
+        m_latestMetaInfo = meta;
+
         tags = new HashSet<String>();
-        tags.add(strTag);
+        addTag(strTag);
 
         accessTime = new HashSet<Long>();
-        accessTime.add(startTime);
+        accessTime.add(lStartTime);
     }
 
     //Insert new version. always increased.
-    synchronized public void addNewVersion(String strHostName, String strTierName, TierInfo.TIER_TYPE initTierType, long startTime, long size) {
+    synchronized public void addNewVersion(long lStartTime, long lSize) {
         if (m_bSupportVersioning == false) {
             //Version is not supported
             return;
         }
 
-        m_nLatestVer++;
-        MetaVerInfo obj = new MetaVerInfo(m_nLatestVer, strHostName, strTierName, initTierType, startTime, size);
-        m_versions.put(m_nLatestVer, obj);
-        m_latestMetaInfo.m_lLastModifiedTime = startTime;
-        m_latestMetaInfo.m_lSize = size;
+        int nVer = m_latestMetaInfo.getVersion() + 1;
+        MetaVerInfo meta = new MetaVerInfo(nVer, lStartTime, lSize);
+        m_versions.put(nVer, meta);
+        m_latestMetaInfo = meta;
+    }
+
+    //Insert new version. always increased.
+    synchronized public void addNewVersion(long lStartTime, long lSize, int nVer) {
+        if (m_bSupportVersioning == false) {
+            //Version is not supported
+            return;
+        }
+
+        MetaVerInfo meta = new MetaVerInfo(nVer, lStartTime, lSize);
+        m_versions.put(nVer, meta);
+
+        if(nVer >= m_latestMetaInfo.getVersion()) {
+            m_latestMetaInfo = meta;
+        }
     }
 
     //Update version if it is updated by other peers, or newly added,
-    synchronized public void updateVersion(int nVersion, String strHostName, String strTierName, TierInfo.TIER_TYPE initTierType, long modifiedTime, long size) {
+    synchronized public void updateVersion(int nVer, long lModifiedTime, long lSize) {
         if (m_bSupportVersioning == false) {
             //Version is not supported
             return;
         }
 
-        MetaVerInfo verInfo = m_versions.get(nVersion);
+        MetaVerInfo meta = m_versions.get(nVer);
 
-        if (verInfo == null) {
+        if (meta == null) {
+            meta = new MetaVerInfo(nVer, lModifiedTime, lSize);
+            m_versions.put(nVer, meta);
+
             //Need to be synced?
-            if (m_nLatestVer < nVersion) {
-                m_nLatestVer = nVersion;
+            if (m_latestMetaInfo.getVersion() < nVer) {
+                m_latestMetaInfo = meta;
             }
-
-            verInfo = new MetaVerInfo(nVersion, strHostName, strTierName, initTierType, modifiedTime, size);
-            m_versions.put(m_nLatestVer, verInfo);
         } else {
-            verInfo.setLastModifedTime(modifiedTime);
+            meta.setLastModifedTime(lModifiedTime);
+            meta.setSize(lSize);
         }
     }
 
+    //Update version if it is updated by other peers, or newly added,
+    synchronized public boolean containsVer(int nVer) {
+        return m_versions.containsKey(nVer);
+    }
+
     public int getLastestVersion() {
-        return m_nLatestVer;
+        return m_latestMetaInfo.getVersion();
     }
 
     public String getKey() {
@@ -125,7 +148,7 @@ public class MetaObjectInfo {
     }
 
     public String getVersionedKey() {
-        return getVersionedKey(m_nLatestVer);
+        return getVersionedKey(m_latestMetaInfo.getVersion());
     }
 
     public String getVersionedKey(int nVer) {
@@ -137,14 +160,14 @@ public class MetaObjectInfo {
         }
     }
 
-    public void fillVersionGap(long version) {
+    /*public void fillVersionGap(long version) {
         long nGap = version - m_nLatestVer;
 
         for (int i = 0; i < nGap; i++) {
             m_nLatestVer++;
             m_versions.put(m_nLatestVer, null);
         }
-    }
+    }*/
 
     public HashMap<Integer, MetaVerInfo> getVersionList() {
         if (m_bSupportVersioning == true) {
@@ -169,7 +192,7 @@ public class MetaObjectInfo {
     }
 
     public boolean addLocale(String strHostName, String strTierName, TierInfo.TIER_TYPE tierType) {
-        return addLocale(m_nLatestVer, strHostName, strTierName, tierType);
+        return addLocale(getLastestVersion(), strHostName, strTierName, tierType);
     }
 
     //Only when called for internal usage like move or replicate
@@ -232,7 +255,7 @@ public class MetaObjectInfo {
     }
 
     public synchronized boolean removeLocale(String strHostName, String strTierName) {
-        return removeLocale(m_nLatestVer, strHostName, strTierName);
+        return removeLocale(getLastestVersion(), strHostName, strTierName);
     }
 
     public synchronized boolean removeLocale(long nVer, Locale targetLocale) {
@@ -253,6 +276,15 @@ public class MetaObjectInfo {
         } else {
             return false;
         }
+    }
+
+    public synchronized boolean removeVersion(long nVer) {
+        if (m_bSupportVersioning == true && m_versions.containsKey(nVer) == true) {
+            m_versions.remove(nVer);
+            return true;
+        }
+
+        return false;
     }
 
     // set last access time to current time
@@ -309,18 +341,22 @@ public class MetaObjectInfo {
     }
 
     public synchronized Locale getLocale(boolean bOnlyLocal) {
-        return getLocale(m_nLatestVer, bOnlyLocal);
+        return getLocale(getLastestVersion(), bOnlyLocal);
     }
 
-    public synchronized Locale getLocale(long lVer, boolean bOnlyLocal) {
+    public synchronized Locale getLocale(int nVer, boolean bOnlyLocal) {
         MetaVerInfo info;
 
         if (m_bSupportVersioning == true) {
-            if (lVer < 0) {
-                lVer = m_nLatestVer;
+            if (nVer < 0) {
+                nVer = getLastestVersion();
             }
 
-            info = m_versions.get(lVer);//findByVer(lVer);
+            info = m_versions.get(nVer);
+
+            if (info == null) {
+                return null;
+            }
         } else {
             info = m_latestMetaInfo;
         }
@@ -328,15 +364,15 @@ public class MetaObjectInfo {
         return info.getFastestLocale(bOnlyLocal);
     }
 
-    public synchronized Locale getLocale(long lVer, String strLocaleID){
+    public synchronized Locale getLocale(int nVer, String strLocaleID){
         String[] tokens = strLocaleID.split(":");
-        return getLocale(lVer, tokens[0], tokens[1]);
+        return getLocale(nVer, tokens[0], tokens[1]);
     }
 
-    public synchronized Locale getLocale(long lVer, String strHostName, String strTierName){
+    public synchronized Locale getLocale(int nVer, String strHostName, String strTierName){
         MetaVerInfo info;
         if(m_bSupportVersioning == true){
-            info = m_versions.get(lVer);
+            info = m_versions.get(nVer);
         }else{
             info = m_latestMetaInfo;
         }
@@ -348,15 +384,15 @@ public class MetaObjectInfo {
 
     public synchronized boolean hasLocale(String strLocaleID) {
         String[] tokens = strLocaleID.split(":");
-        return hasLocale(m_nLatestVer, tokens[0], tokens[1]);
+        return hasLocale(getLastestVersion(), tokens[0], tokens[1]);
     }
 
-    public synchronized boolean hasLocale(long lVer, String strLocaleID) {
+    public synchronized boolean hasLocale(int nVer, String strLocaleID) {
         String[] tokens = strLocaleID.split(":");
-        return hasLocale(lVer, tokens[0], tokens[1]);
+        return hasLocale(nVer, tokens[0], tokens[1]);
     }
 
-    public synchronized boolean hasLocale(long lVer, String strHostName, String strTierName) {
+    public synchronized boolean hasLocale(int nVer, String strHostName, String strTierName) {
         MetaVerInfo info;
 
         if (strHostName == null) {
@@ -364,11 +400,11 @@ public class MetaObjectInfo {
         }
 
         if (m_bSupportVersioning == true) {
-            if (lVer < 0) {
-                lVer = m_nLatestVer;
+            if (nVer < 0) {
+                nVer = getLastestVersion();
             }
 
-            info = m_versions.get(lVer);//findByVer(nVer);
+            info = m_versions.get(nVer);//findByVer(nVer);
         } else {
             info = m_latestMetaInfo;
         }
@@ -381,18 +417,18 @@ public class MetaObjectInfo {
     }
 
     public synchronized Map<String, Locale> getLocaleList() {
-        return getLocaleList(m_nLatestVer);
+        return getLocaleList(getLastestVersion());
     }
 
-    public synchronized Map<String, Locale> getLocaleList(long lVer) {
+    public synchronized Map<String, Locale> getLocaleList(int nVer) {
         MetaVerInfo info;
 
         if (m_bSupportVersioning == true) {
-            if (lVer < 0) {
-                lVer = m_nLatestVer;
+            if (nVer < 0) {
+                nVer = getLastestVersion();
             }
 
-            info = m_versions.get(lVer);//findByVer(lVer);
+            info = m_versions.get(nVer);
         } else {
             info = m_latestMetaInfo;
         }
@@ -410,5 +446,31 @@ public class MetaObjectInfo {
 
     public synchronized boolean isDirty() {
         return m_latestMetaInfo.m_bDirty;
+    }
+
+    public synchronized Map<String, Object> getMetaData() {
+        return getMetaData(LATEST_VERSION);
+    }
+
+    public synchronized Map<String, Object> getMetaData(int nVer) {
+        if(nVer == LATEST_VERSION) {
+            return m_latestMetaInfo.getMetaInfo();
+        } else {
+            MetaVerInfo meta = m_versions.get(nVer);
+
+            if(meta != null) {
+                return meta.getMetaInfo();
+            } else {
+                return null;
+            }
+        }
+    }
+
+    public void addTag (String strTag) {
+        tags.add(strTag);
+    }
+
+    public Set getTags () {
+        return tags;
     }
 }

@@ -2,7 +2,6 @@ package umn.dcsg.wieralocalserver;
 
 import java.lang.reflect.InvocationTargetException;
 import java.util.*;
-
 import com.google.gson.Gson;
 import umn.dcsg.wieralocalserver.info.Latency;
 import umn.dcsg.wieralocalserver.thriftinterfaces.LocalInstanceToPeerIface.Client;
@@ -13,6 +12,10 @@ import org.apache.thrift.transport.TTransportException;
 
 import org.json.*;
 
+import static umn.dcsg.wieralocalserver.Constants.VALUE;
+import static umn.dcsg.wieralocalserver.Constants.VALUE2;
+import static umn.dcsg.wieralocalserver.Constants.VALUE3;
+
 public class PeerInstancesManager {
     private static final String m_strExternalIP = LocalServer.getExternalIP();
 
@@ -22,8 +25,12 @@ public class PeerInstancesManager {
     public LocalPeerInstancesServer m_localInstancePeerServer;
     LocalInstance m_instance = null;
 
+    //ConcurrentHashMap<String, ThriftClientPool> m_peersList;
     HashMap<String, ThriftClientPool> m_peersList;
     String m_strPrimaryHostname;
+    int m_nExpectedPeerInstanceCnt = 0;
+
+    public int getExpectedPeerInstanceCnt() {return m_nExpectedPeerInstanceCnt;}
 
     //This class will be used for ping and getting information with piggybacking
     public class Ping implements Runnable {
@@ -52,13 +59,23 @@ public class PeerInstancesManager {
                         JSONObject ret = new JSONObject(strRet);
 
                         boolean bResult = (boolean) ret.get(Constants.RESULT);
-                        double op_time = Utils.convertToDouble(ret.get(Constants.OP_TIME));
-
-                        String strStorageInfo = (String) ret.get(Constants.VALUE);
-                        String strNetworkInfo = (String) ret.get(Constants.VALUE2);
-                        String strAccessInfo = (String) ret.get(Constants.VALUE3);
 
                         if (bResult == true) {
+                            String strStorageInfo = null;
+                            String strNetworkInfo = null;
+                            String strAccessInfo = null;
+
+                            if(ret.has(VALUE) == true) {
+                                strStorageInfo = (String) ret.get(VALUE);
+                            }
+                            if(ret.has(VALUE2) == true) {
+                                strNetworkInfo = (String) ret.get(VALUE2);
+                            }
+                            if(ret.has(VALUE3) == true) {
+                                strAccessInfo = (String) ret.get(VALUE3);
+                            }
+
+                            double op_time = Utils.convertToDouble(ret.get(Constants.OP_TIME));
                             latency.setAdjustTime(op_time);
 
                             m_instance.m_localInfo.addNetworkLatency(strHostName, latency);
@@ -87,7 +104,8 @@ public class PeerInstancesManager {
                 try {
                     lTime += 1;
                     lTime %= 4;
-                    Thread.sleep(1666);
+                    //Thread.sleep(1666);
+                    Thread.sleep(10000);
                 } catch (InterruptedException e) {
                     e.printStackTrace();
                 }
@@ -109,7 +127,7 @@ public class PeerInstancesManager {
         if (info != null) {
             return (Client) info.getClient();
         } else {
-            //	System.out.println("[debug] Failed to find peer list of " + strHostName);
+            System.out.println("[debug] Failed to find peer list with the hostname: " + strHostName);
         }
 
         return null;
@@ -123,8 +141,9 @@ public class PeerInstancesManager {
         }
     }
 
-    public PeerInstancesManager(LocalInstance instance) {
+    public PeerInstancesManager(LocalInstance instance, int nExpectedPeerInstancesCnt) {
         m_instance = instance;
+        m_nExpectedPeerInstanceCnt = nExpectedPeerInstancesCnt;
         m_peersList = new HashMap<String, ThriftClientPool>();
 
         //ping (latency) info
@@ -176,7 +195,7 @@ public class PeerInstancesManager {
 					long lCurRead = ((QuorumConsistencyResponse) m_dataDistribution).getReadQuorum();
 					long lCurWrite = ((QuorumConsistencyResponse) m_dataDistribution).getWriteQuorum();
 
-					long lRead = Utils.convertToLong(policy.get(Constants.READ_QUORUM));
+					long lRead = Utils.convertToLong(policy.get(Constants.QUORUM));
 					long lWrite = Utils.convertToLong(policy.get(Constants.WRITE_QUORUM));
 
 					if (lCurRead == lRead && lCurWrite == lWrite)
@@ -210,7 +229,7 @@ public class PeerInstancesManager {
 		switch (dataDistributionType)
 		{
 			case MULTIPLE_MASTERS:
-				dataDistribution = new MultiplePrimariesConsistencyResponse(m_localInstance, strPolicyID, m_dataDistributionLock);
+				dataDistribution = new MultiplePrimariesConsistencyResponse(m_localInstance, strPolicyID, m_dataDistributionLock;
 				break;
 			case PRIMARY_BACKUP:
 				String strPrimaryServer = (String) policy.get(Constants.PRIMARY);
@@ -222,7 +241,7 @@ public class PeerInstancesManager {
 				dataDistribution = new EventualConsistencyResponse(m_localInstance, strPolicyID, lPeriod, m_dataDistributionLock);
 				break;
 			case QUORUM:
-				long lRead = Utils.convertToLong(policy.get(Constants.READ_QUORUM));
+				long lRead = Utils.convertToLong(policy.get(Constants.QUORUM));
 				long lWrite = Utils.convertToLong(policy.get(Constants.WRITE_QUORUM));
 
 				dataDistribution = new QuorumConsistencyResponse(m_localInstance, strPolicyID, lRead, lWrite, m_dataDistributionLock);
@@ -267,7 +286,7 @@ public class PeerInstancesManager {
         try {
             m_dataDistributionLock.writeLock().lock();
 
-            //Main code to set data distribution
+            //Main code to put data distribution
             m_dataDistribution = dataDistribution;
 
             //Just for messaging to terminal
@@ -319,19 +338,19 @@ public class PeerInstancesManager {
     }
 	*/
 
-    public HashMap<String, ThriftClientPool> getPeersList() {
+    public Map<String, ThriftClientPool> getPeersList() {
         return m_peersList;
     }
 
     public List<String> getPeersHostnameList() {
         if (m_peersList != null) {
-            return new LinkedList<>(getPeersList().keySet());
+            return new LinkedList<>(m_peersList.keySet());
         } else {
             return null;
         }
     }
 
-    public List<String> getRandomPeers(int nCnt) {
+    public List<String> getRandomPeerHostname (int nCnt) {
         List lst = new LinkedList<>(getPeersList().keySet());
         Collections.shuffle(lst);
         return lst.subList(0, nCnt);
@@ -372,8 +391,8 @@ public class PeerInstancesManager {
                     //For now only one instance per global_policy
                     if (m_peersList.containsKey(strPeerHostName) == false) {
                         //Thrift client is currently 2->number of peer connection
-                        //pool = new ThriftClientPool(strPeerIP, nPeerPort, 12, LocalInstanceClient.class);
-                        pool = new ThriftClientPool(strPeerIP, nPeerPort, 5, Client.class);
+                        //pool = new ThriftClientPool(strPeerIP, nPeerPort, 12, LocalInstanceCLI.class);
+                        pool = new ThriftClientPool(strPeerIP, nPeerPort, 16, Client.class);
                         m_peersList.put(strPeerHostName, pool);
 
                         //For ping
@@ -428,7 +447,7 @@ public class PeerInstancesManager {
                 boolean bRet = (boolean) response.get("result");
 
                 if (bRet == false) {
-                    String strReason = (String) response.get(Constants.VALUE);
+                    String strReason = (String) response.get(VALUE);
                     System.out.println("Failed to update monitoring information to Wiera Reason: " + strReason);
                 } else {
                     return true;

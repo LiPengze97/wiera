@@ -6,6 +6,9 @@ import java.util.Vector;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import com.google.common.util.concurrent.RateLimiter;
 import umn.dcsg.wieralocalserver.*;
+import umn.dcsg.wieralocalserver.responses.peers.ForwardGetResponse;
+import umn.dcsg.wieralocalserver.responses.peers.ForwardPutResponse;
+
 import static umn.dcsg.wieralocalserver.Constants.*;
 
 /**
@@ -58,11 +61,7 @@ public class CopyResponse extends Response {
         String strVersionedKey;
         int nVer;
         Vector verList;
-        String strReason = NOT_HANDLED;
-
-        System.out.println(((Locale)keyList.keySet().toArray()[0]).getLocaleID());
-        System.out.println(fromLocale.getLocaleID());
-
+        String strReason = NOT_HANDLED  + " in " + getClass().getSimpleName();
 
         //Locale now override equals()
         if(keyList.containsKey(fromLocale) == true && keyList.get(fromLocale).size() > 0) {
@@ -142,7 +141,7 @@ public class CopyResponse extends Response {
                     if (!bRet) {
                         break;
                     } else {
-                        addObjsToUpdate(obj, responseParams);
+                        addMetaToUpdate(obj, responseParams);
                     }
                 }
             }
@@ -152,5 +151,10 @@ public class CopyResponse extends Response {
         responseParams.put(REASON, strReason);
 
         return bRet;
+    }
+
+    @Override
+    public boolean doCheckResponseConditions(Map<String, Object> responseParams) {
+        return true;
     }
 }

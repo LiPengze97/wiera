@@ -1,21 +1,19 @@
 package umn.dcsg.wieralocalserver;
 import static umn.dcsg.wieralocalserver.Constants.*;
+import static umn.dcsg.wieralocalserver.MetaObjectInfo.*;
 import static umn.dcsg.wieralocalserver.TierInfo.TIER_TYPE.*;
 
 import com.google.common.reflect.TypeToken;
 import com.google.gson.Gson;
-import org.apache.commons.lang3.text.StrLookup;
+import org.apache.thrift.TProcessor;
 import umn.dcsg.wieralocalserver.events.Event;
-import umn.dcsg.wieralocalserver.events.EventDispatch;
 import umn.dcsg.wieralocalserver.events.EventRegistry;
 import umn.dcsg.wieralocalserver.events.MonitoringEvent;
 import umn.dcsg.wieralocalserver.responses.Response;
 import umn.dcsg.wieralocalserver.info.Latency;
 import umn.dcsg.wieralocalserver.storageinterfaces.StorageInterface;
-import umn.dcsg.wieralocalserver.thriftinterfaces.ApplicationToLocalInstanceIface;
-import umn.dcsg.wieralocalserver.thriftinterfaces.LocalInstanceToWieraIface;
-import umn.dcsg.wieralocalserver.thriftinterfaces.RedisWrapperApplicationIface;
-import umn.dcsg.wieralocalserver.thriftinterfaces.WieraToLocalInstanceIface;
+import umn.dcsg.wieralocalserver.thriftinterfaces.*;
+import umn.dcsg.wieralocalserver.wrapper.KimchiWrapperApplicationInterface;
 import umn.dcsg.wieralocalserver.wrapper.RedisWrapperApplicationInterface;
 import org.apache.thrift.TException;
 import org.apache.thrift.protocol.TBinaryProtocol;
@@ -40,15 +38,56 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import org.json.*;
 
+/**
+ * LocalInstance's duties
+ *      1. Manage metadata
+ *      2. Provide services for wiera central, client, peers, and also have peer-client
+ *      3. Manage Event and response
+ *      4. Storage Tiers
+ * Thrift Servers and Client
+ * 1. Client
+ *      A list of peer clients
+ *          Service:
+ *      A client of the Wiera central server
+ *          Service:
+ * 2. Servers:
+ *      A server for peers:
+ *          Service: [via LocalInstanceToPeerInterface]
+ *              ping()
+ *              // arguments are a json string.
+ *              forwardPutRequest(strPutReq) -> localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(value)) -> trigger PUT event
+ *              put(strReq) -> localInstance.put(strKey, nVer, value, strTiername)
+ *              get(strReq) -> localInstance.get(strKey, nVer, strTierName)
+ *              getLatestVersion(strKey) -> localInstance.getLatestVersion(strKey)
+ *              getClusterLock(strLockReq)
+ *              releaseClusterLock(strLockReq)
+ *
+ public java.lang.String setLeader(java.lang.String strLeaderHostnameReq) throws org.apache.thrift.TException;
+ *      A server for applications:
+ *          Services: [via ApplicationToLocalInstanceInterface]
+ *              put(key, value) -> trigger PUT events
+ *              update(key, version, value) [not implemented]
+ *              get(key) -> trigger GET events
+ *              getVersion(key,version) // get a specific version value of a key. -> localInstance.get(key, nVersion)
+ *              getVersionList(key) -> localInstance.getVersionList(key)
+ *              remove(key) -> localInstance.delete(key, MetaObjectInfo.LATEST_VERSION)
+ *              removeVersion(key, version) -> localInstance.delete(key, nVersion)
+ *      A server for Wiera central server:
+ *          Service:
+ *
+ *
+ *
+ *
+ *
+ * */
 
 public class LocalInstance {
     public MetadataStore m_metadataStore = null;
     public KeyLocker m_keyLocker = null;
     public TServer m_applicationServer = null;
-    public TServer m_redisWrapperApplicationServer = null;
+    public TServer m_wrapperApplicationServer = null;
     public TServer m_wieraServer = null;
     public Tiers m_tiers = null;
-    public String m_strDefaultTierName = null;
     public Metrics m_localInfo = null;
 
     // Threads that process events are stored in this vector, for now they only process threshold events
@@ -84,8 +123,8 @@ public class LocalInstance {
     final private int defaultEDTCount = 1;
     private int edtCount = defaultEDTCount;
 
-    private boolean m_bRedisSupport = false;
-    private boolean m_bVersioningSupport = false;
+    private String m_strWrapper = "KIMCHI";
+    private boolean m_bVersionSupport = false;
     // This is a hack we generate a new key for each incarnation of LocalInstance, instead
     // we should be reading the key from a file
     public String encryptionAlgorithm = "AES";
@@ -119,13 +158,38 @@ public class LocalInstance {
     //Wiera id where the LocalInstance instance are running for
     protected String m_strPolicyID;
     protected boolean m_bStandAloneMode;
+    protected JSONObject m_configurations;
+
+    public boolean hasPolicyConf(String strKey) {
+        if(m_configurations != null) {
+             return m_configurations.has(strKey);
+        }
+
+        return false;
+    }
+
+    public int getPolicyConfInt(String strKey) {
+        if(hasPolicyConf(strKey) == true) {
+            return m_configurations.getInt(strKey);
+        }
+
+        return 0;
+    }
+
+    public boolean getPolicyConfBoolean(String strKey) {
+        if(hasPolicyConf(strKey) == true) {
+            return m_configurations.getBoolean(strKey);
+        }
+
+        return false;
+    }
 
     //	public SocketComm m_instanceManagerComm = null;
     public PeerInstancesManager m_peerInstanceManager = null;
     public ApplicationToLocalInstanceInterface m_applicationToLocalInstanceInterface = null; //This is for forwarded request for now.
 
     public boolean isVersionSupported() {
-        return m_bVersioningSupport;
+        return m_bVersionSupport;
     }
 
     public boolean isStandAloneMode() {
@@ -164,18 +228,25 @@ public class LocalInstance {
 
         //Check if there is any peer instance.
         if (m_bStandAloneMode == false) {
-            bRet = InitServerForPeers();
+            int nExpectedPeerInstancesCnt = 0;
+
+            if(policy.has(INSTANCE_CNT) == true) {
+                nExpectedPeerInstancesCnt = policy.getInt(INSTANCE_CNT);
+            }
+
+            //Pass expected
+            bRet = InitServerForPeers(nExpectedPeerInstancesCnt);
             if (bRet == false) {
                 System.out.println("Failed to init server for peer.");
                 return false;
             }
         }
 
-        if (m_bRedisSupport == true) {
-            //Redis Wrapper Server
-            bRet = InitRedisWrapperServerForApplication();
+        if (m_strWrapper != null) {
+            //Wrapper Server
+            bRet = InitWrapperServerForApplication(m_strWrapper, 55566);
             if (bRet == false) {
-                System.out.print("Failed to init redis Wrapper server for Application.");
+                System.out.print("Failed to init Wrapper server for Application.");
             }
         }
 
@@ -214,14 +285,9 @@ public class LocalInstance {
                     edtCount = defaultEDTCount;
             }
 
-            tmp = config.getProperty("redis");
+            tmp = config.getProperty("wrapper");
             if (tmp != null) {
-                m_bRedisSupport = Boolean.parseBoolean(tmp);
-            }
-
-            tmp = config.getProperty("versioning");
-            if (tmp != null) {
-                m_bVersioningSupport = Boolean.parseBoolean(tmp);
+                m_strWrapper = "KIMCHI"; //tmp;
             }
 
             tmp = config.getProperty("encryption");
@@ -251,8 +317,9 @@ public class LocalInstance {
     void initTiers(JSONObject localPolicy) {
         m_tiers = new Tiers((JSONArray) localPolicy.get(STORAGE_TIERS), workerCount);
 
-        if(m_tiers.getDefaultTier() != null) {
-            m_strDefaultTierName = m_tiers.getDefaultTier().getTierName();
+        if(Locale.defaultLocalLocale == null) {
+            String strDefaultTierName = m_tiers.getDefaultTier().getTierName();
+            Locale.defaultLocalLocale = new Locale(LocalServer.getHostName(), strDefaultTierName, m_tiers.getTierType(strDefaultTierName));
         }
     }
 
@@ -274,8 +341,7 @@ public class LocalInstance {
 
                 //Convert JSon into Map
                 params = new Gson().fromJson(responseParams.toString(),
-                        new TypeToken<HashMap<String, Object>>() {
-                        }.getType());
+                        new TypeToken<HashMap<String, Object>>() {}.getType());
             } else {
                 params = null;
             }
@@ -458,6 +524,17 @@ public class LocalInstance {
     public LocalInstance(String configFileName, JSONObject policy, boolean bStandAlone) throws NoSuchFieldException, IOException {
         m_bStandAloneMode = bStandAlone;
         m_strPolicyID = (String) policy.get(ID);
+
+        if(policy.has(CONFIGURATIONS) == true) {
+            m_configurations = policy.getJSONObject(CONFIGURATIONS);
+
+            if(m_configurations.has(VERSION_SUPPORT) == true) {
+                m_bVersionSupport = m_configurations.getBoolean(VERSION_SUPPORT);
+            } else {
+                m_bVersionSupport = false;
+            }
+        }
+
         JSONObject localPolicy;
 
         if(policy.has(LocalServer.getHostName()) == true) {
@@ -478,7 +555,7 @@ public class LocalInstance {
         initMetadataStore(m_strPolicyID);
 
         // Parse the config file to see if we want any default values to be overridden
-        //Worker, Process for event, encrytion
+        //Worker, Process for event, encryption
         initConfiguration(configFileName);
 
         // Initialize the list of m_tiers we can support
@@ -513,21 +590,21 @@ public class LocalInstance {
             }
         }
 
-        if (m_bRedisSupport == true) {
+        if (m_strWrapper != null) {
             //Now run thirft server forever
-            Thread redisWrapperApplicationServerThread = new Thread(new Runnable() {
+            Thread wrapperApplicationServerThread = new Thread(new Runnable() {
                 @Override
                 public void run() {
-                    m_redisWrapperApplicationServer.serve();
+                    m_wrapperApplicationServer.serve();
                 }
             });
-            redisWrapperApplicationServerThread.start();
+            wrapperApplicationServerThread.start();
 
             //Make sure WrapperApplications is running
-            synchronized (m_redisWrapperApplicationServer) {
-                while (m_redisWrapperApplicationServer.isServing() == false) {
+            synchronized (m_wrapperApplicationServer) {
+                while (m_wrapperApplicationServer.isServing() == false) {
                     try {
-                        m_redisWrapperApplicationServer.wait(100);
+                        m_wrapperApplicationServer.wait(100);
                     } catch (InterruptedException e) {
                         e.printStackTrace();
                     }
@@ -592,19 +669,29 @@ public class LocalInstance {
         System.out.println("Exception but this instance will be terminated.");
     }
 
-    //This will let the peer server run and handle the request.
-    private boolean InitRedisWrapperServerForApplication() {
+    //Make wrapper class with given name (e.g., redis, kimchi...)
+    private boolean InitWrapperServerForApplication(String strSupportWrapper, int nPort) {
         try {
             //TServerSocket socket = new TServerSocket(9098); //listenPort); -> now become random port for client.
-            TServerSocket socket = new TServerSocket(6378); //listenPort); -> now become random port for client.
+            TServerSocket socket = new TServerSocket(nPort); //listenPort); -> now become random port for client.
             TServerTransport serverTransport = socket;
             TProtocolFactory tProtocolFactory = new TBinaryProtocol.Factory(true, true);
-            TTransportFactory transportFactory = new TFramedTransport.Factory(1048576 * 200);    //Set max size
-            RedisWrapperApplicationInterface redis = new RedisWrapperApplicationInterface(this);
-            RedisWrapperApplicationIface.Processor processor = new RedisWrapperApplicationIface.Processor(redis);
-            m_redisWrapperApplicationServer = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport)
-                    .minWorkerThreads(16) // TODO Take this as arguments from user
-                    .maxWorkerThreads(64) // TODO Take this as arguments from user
+            TTransportFactory transportFactory = new TFramedTransport.Factory();    //Set max size
+            TProcessor processor = null;
+
+            if(strSupportWrapper.equalsIgnoreCase("REDIS") == true) {
+                RedisWrapperApplicationInterface redis = new RedisWrapperApplicationInterface(this);
+                processor = new RedisWrapperApplicationIface.Processor(redis);
+            } else if((strSupportWrapper.equalsIgnoreCase("KIMCHI") == true)) {
+                KimchiWrapperApplicationInterface kimchi = new KimchiWrapperApplicationInterface(this);
+                processor = new KimchiWrapperApplicationIface.Processor(kimchi);
+            } else {
+                return false;
+            }
+
+            m_wrapperApplicationServer = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport)
+                    .minWorkerThreads(128) // TODO Take this as arguments from user
+                    .maxWorkerThreads(512) // TODO Take this as arguments from user
                     .inputTransportFactory(transportFactory)
                     .outputTransportFactory(transportFactory)
                     .inputProtocolFactory(tProtocolFactory)
@@ -640,12 +727,12 @@ public class LocalInstance {
 
             TServerTransport serverTransport = socket;
             TProtocolFactory tProtocolFactory = new TBinaryProtocol.Factory(true, true);
-            TTransportFactory transportFactory = new TFramedTransport.Factory(1048576 * 200);    //Set max size
+            TTransportFactory transportFactory = new TFramedTransport.Factory();    //Set max size
             m_applicationToLocalInstanceInterface = new ApplicationToLocalInstanceInterface(this);
             ApplicationToLocalInstanceIface.Processor processor = new ApplicationToLocalInstanceIface.Processor(m_applicationToLocalInstanceInterface);
             m_applicationServer = new TThreadPoolServer(new TThreadPoolServer.Args(serverTransport)
-                    .minWorkerThreads(16) // TODO Take this as arguments from user
-                    .maxWorkerThreads(64) // TODO Take this as arguments from user
+                    .minWorkerThreads(64) // TODO Take this as arguments from user
+                    .maxWorkerThreads(128) // TODO Take this as arguments from user
                     .inputTransportFactory(transportFactory)
                     .outputTransportFactory(transportFactory)
                     .inputProtocolFactory(tProtocolFactory)
@@ -692,8 +779,12 @@ public class LocalInstance {
         return false;
     }
 
-    private boolean InitServerForPeers() {
-        m_peerInstanceManager = new PeerInstancesManager(this);
+    private boolean InitServerForPeers(int nExpectedPeerInstancesCnt) {
+        m_peerInstanceManager = new PeerInstancesManager(this, nExpectedPeerInstancesCnt);
+
+        if(m_configurations != null && m_configurations.has(PRIMARY) == true) {
+            m_peerInstanceManager.setPrimaryPeerHostname(m_configurations.getString(PRIMARY));
+        }
 /*      String strReason = m_peerInstanceManager.setDataDistribution(policy);
         if (strReason != null) {
             System.out.println(strReason);
@@ -866,44 +957,46 @@ public class LocalInstance {
             // Get the lock for this object
             // Lock the object down before doing anything else
             lock.readLock().lock();
-            MetaObjectInfo obj = getMetadata(strKey);
+            MetaObjectInfo meta = getMetadata(strKey);
 
-            if (obj != null) {
-                if (nVer < 0) {
-                    nVer = obj.getLastestVersion();
+            if (meta != null) {
+                if(nVer < 0 || nVer == LATEST_VERSION) {
+                    nVer = meta.getLastestVersion();
                 }
 
-                if (m_bVersioningSupport == true) {
-                    strVersionedKey = obj.getVersionedKey(nVer);
-                }
+                if(meta.containsVer(nVer) == true) {
+                    strVersionedKey = meta.getVersionedKey(nVer);
 
-                //Check storage tiername
-                //If tier name is not specified, just retrieve from the fastest tier
-                if (strTierName == null || strTierName.isEmpty() == true) {
-                    strTierName = obj.getLocale(nVer, true).getTierName();
-                } else if (obj.hasLocale(nVer, LocalServer.getHostName(), strTierName) == false) {
-                    //Compare metadata. Check localhost locale
-                    //If meta and desired storage tier is not the same, show error
-                    //and use the stored storage tier.
-                    Locale targetLocale = obj.getLocale(nVer, true);
+                    //Check storage tiername
+                    //If tier name is not specified, just retrieve from the fastest tier
+                    if (strTierName == null || strTierName.isEmpty() == true) {
+                        strTierName = meta.getLocale(nVer, true).getTierName();
+                    } else if (meta.hasLocale(nVer, LocalServer.getHostName(), strTierName) == false) {
+                        //Compare metadata. Check localhost locale
+                        //If meta and desired storage tier is not the same, show error
+                        //and use the stored storage tier.
+                        Locale targetLocale = meta.getLocale(nVer, true);
 
-                    if(targetLocale == null) {
-                        System.out.printf("[debug] Failed to find available locale for the key:%s ver:%d\n", strKey, nVer);
-                        return null;
+                        if(targetLocale == null) {
+                            System.out.printf("[debug] Failed to find available locale for the key:%s ver:%d\n", strKey, nVer);
+                            return null;
+                        }
+
+                        System.out.println("[debug] Requested local Tier Name: " + strTierName + " is not in DB but found: " + targetLocale.getTierName());
+                        strTierName = targetLocale.getTierName();
                     }
 
-                    System.out.println("[debug] Requested local Tier Name: " + strTierName + " is not in DB but found: " + targetLocale.getTierName());
-                    strTierName = targetLocale.getTierName();
-                }
+                    retVal = getInternal(strVersionedKey, strTierName);
+                    //System.out.println("[debug] read data:\n" + new String(retVal));
 
-                retVal = getInternal(strVersionedKey, strTierName);
-                //System.out.println("[debug] read data:\n" + new String(retVal));
-
-                if(bUpdateMeta == true) {
-                    //update information to db only when bUpdate param is true
-                    obj.countInc();
-                    obj.setLAT();
-                    commitMeta(obj);
+                    if(bUpdateMeta == true) {
+                        //update information to db only when bUpdate param is true
+                        meta.countInc();
+                        meta.setLAT();
+                        commitMeta(meta);
+                    }
+                } else {
+                    System.out.printf("Meta for key:%s found but version:%d is not available.\n", strKey, nVer);
                 }
             } else {
                 System.out.println("Failed to find meta data associated with the key for getObject: " + strKey);
@@ -951,7 +1044,7 @@ public class LocalInstance {
                         break;
                     } else {
 
-                        if (m_bVersioningSupport == true) {
+                        if (m_bVersionSupport == true) {
                             strKey = obj.getVersionedKey(nVer);
                         }
 
@@ -967,7 +1060,7 @@ public class LocalInstance {
                 }
 
                 //Remove version
-                if(m_bVersioningSupport == false || obj.getVersionList().size() == 0) {
+                if(m_bVersionSupport == false || obj.getVersionList().size() == 0) {
                     m_metadataStore.deleteObject(strKey);
                 }
 
@@ -1002,7 +1095,6 @@ public class LocalInstance {
         } catch (Exception e) {
             e.printStackTrace();
         }
-
         return false;
     }
 
@@ -1044,7 +1136,7 @@ public class LocalInstance {
             long lSize = getMetadata(strKey).getSize();
             lRequiredSpace -= lSize;
 
-            System.out.printf("[debug] RequiredSpace: %d size in meta: %d\n", lRequiredSpace, lSize);
+            System.out.printf("[debug] RequiredSpace: %d size in meta: %d key: %s\n", lRequiredSpace, lSize, strKey);
         }
 
         //Check storage size
@@ -1069,57 +1161,62 @@ public class LocalInstance {
             //tierInfo.useSpace(value.length);
             //Update used storage size
             tierInfo.useSpace(lRequiredSpace);
-            System.out.printf("[debug] Tier: %s free Space: %d\n", tierInfo.getTierName(), tierInfo.getFreeSpace());
+            //System.out.printf("[debug] Tier: %s free Space: %d key: %s\n", tierInfo.getTierName(), tierInfo.getFreeSpace(), strKey);
 
             latency.stop();
 
             if (m_localInfo.addTierLatency(strTierName, PUT_LATENCY, latency) == false) {
                 System.out.printf("Failed to put latency into stat : %.2f\n", latency.getLatencyInMills());
             }
+        } else {
+            System.out.printf("Failed to put key: \n", strKey);
         }
 
         return ret;
     }
 
-    //Now return key nVer
     //Let think the case, local nVer is 1 and remote nVer is 3. How to handle nVer 2. Ignore?
-    //Only called in putFromPeer()
-    public MetaObjectInfo updateVersion(String key, int nVer, byte[] value, String strTierName, String strTag, long modified_time, boolean bRemovePrevious) {
+    public MetaObjectInfo putKeyWithVer(String key, int nVer, byte[] value, String strTierName, String strTag, long lModifiedTime, boolean bUpdateMeta, boolean bRemovePrevious) {
         boolean bRet;
-        MetaObjectInfo obj = null;
+        MetaObjectInfo meta = null;
         ReentrantReadWriteLock lock = m_keyLocker.getLock(key);
 
         try {
             lock.writeLock().lock();
-            obj = getMetadata(key);
+            meta = getMetadata(key);
 
             //This should not happen
-            if (obj == null) {
+            if (meta == null) {
                 System.out.println("Failed to find metadata for the key: " + key + "This should not happen!!!");
                 return null;
             } else {
-                String strCurTierName = obj.getLocale(true).getTierName();
-                obj.updateVersion(nVer, modified_time, value.length);
+                String strCurTierName = meta.getLocale(true).getTierName();
+                meta.updateVersion(nVer, lModifiedTime, value.length);
 
                 //try to updates
-                String strVersionedKey = obj.getVersionedKey(nVer);
+                String strVersionedKey = meta.getVersionedKey(nVer);
                 bRet = putInternal(strVersionedKey, value, strTierName);
 
                 if (bRet == true) {
+                    meta.addLocale(LocalServer.getHostName(), strTierName, getLocalStorageTierType(strTierName));
+
                     //Need to handle changed location.
                     if (isVersionSupported() == false) {
                         //maybe need to remove previous replica as it is moved to other location if Tiername Changed
                         if (strCurTierName.compareTo(strTierName) != 0) {
                             //Remove previous one in this instance
-                            obj.addLocale(LocalServer.getHostName(), strTierName, getLocalStorageTierType(strTierName));
-                            obj.removeLocale(LocalServer.getHostName(), strCurTierName);
+                            meta.removeLocale(LocalServer.getHostName(), strCurTierName);
 
                             if (bRemovePrevious == true) {
                                 //Todo delete operation can be done in the background with dedicated thread
-                                deleteInternal(obj, strCurTierName);
+                                deleteInternal(meta, strCurTierName);
                                 //System.out.println("!Delete key :" + strVersionedKey + " stored in " + strCurTierName);
                             }
                         }
+                    }
+
+                    if(bUpdateMeta == true) {
+                        commitMeta(meta);
                     }
                 }
             }
@@ -1129,7 +1226,7 @@ public class LocalInstance {
             lock.writeLock().unlock();
         }
 
-        return obj;
+        return meta;
     }
 
     public MetaObjectInfo getMetadata(String strKey) {
@@ -1144,27 +1241,29 @@ public class LocalInstance {
     }
 
     //Assume that all functions calling this function already have a lock for the key
-    public MetaObjectInfo updateMetadata(String strKey, long lValueSize, String strTag, Boolean bSupportVersion) {
+    public MetaObjectInfo updateMetadata(String strKey, long lSize, String strTag, int nVer) {
         MetaObjectInfo obj = getMetadata(strKey);
         long curTime = System.currentTimeMillis();
 
         //if not exist, create it
         if (obj == null) {
             //Create new
-            obj = new MetaObjectInfo(strKey, lValueSize, strTag, bSupportVersion);
+            if(m_bVersionSupport == false) {
+                nVer = NO_VERSIONING_SUPPORT;
+            }
+
+            obj = new MetaObjectInfo(strKey, lSize, strTag, nVer);
         }
 
-        if (bSupportVersion == true) {
-            //Add new version for putObject operation.
-            obj.addNewVersion(curTime, lValueSize);
-        }
+        //Add new version for putObject operation.
+        obj.addNewVersion(curTime, lSize, nVer);
 
         try {
             obj.countInc();
             obj.setLAT(curTime);
             obj.setDirty();
             obj.setLastModifiedTime(obj.getLAT()); //added for EventualConsistencyResponse consistecny for now. (will use vector or something else);
-            obj.setSize(lValueSize);
+            obj.setSize(lSize);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -1184,37 +1283,53 @@ public class LocalInstance {
         return false;
     }
 
+    //Version is increase automatically if version supported
+    public MetaObjectInfo put(String strKey, byte[] value, String strTierName, String strTag, boolean bUpdateMeta) {
+        int nVer = NEW_VERSION;
+        MetaObjectInfo meta = getMetadata(strKey);
+        if(meta != null && isVersionSupported() == true) {
+            nVer = meta.getLastestVersion() + 1; //Increase version
+        }
+
+        return put(strKey, nVer, value, strTierName, strTag, bUpdateMeta);
+    }
+
     //Now return object info
     //This function only used for a new version
     //The bUpdateMeta will be true only if when the object is accessed by peer (forward)
-    public MetaObjectInfo put(String strKey, byte[] value, String strTierName, String strTag, boolean bUpdateMeta) {
+    public MetaObjectInfo put(String strKey, int nVer, byte[] value, String strTierName, String strTag, boolean bUpdateMeta) {
         ReentrantReadWriteLock lock = m_keyLocker.getLock(strKey);
-        MetaObjectInfo obj;
+        MetaObjectInfo meta = null;
 
         try {
             //System.out.format("Put operation Key: %s Size: %d TierName: %s\n", strKey, value.length, strTierName);
             lock.writeLock().lock();
+            //System.out.format("Lock for key: %s\n", strKey);
 
-            obj = updateMetadata(strKey, value.length, strTag, m_bVersioningSupport);
-            if (obj != null) {
-                String strVersionedKey = obj.getVersionedKey();
+            meta = updateMetadata(strKey, value.length, strTag, nVer);
+            if (meta != null) {
+                String strVersionedKey = meta.getVersionedKey();
                 if (putInternal(strVersionedKey, value, strTierName) == false) {
                     System.out.format("Failed to putObject the object key: %s\n", strVersionedKey);
                     return null;
                 } else {
-                    //This function should be called to update meta information
-                    obj.addLocale(LocalServer.getHostName(), strTierName, getLocalStorageTierType(strTierName));
+                    meta.addLocale(LocalServer.getHostName(), strTierName, getLocalStorageTierType(strTierName));
 
+                    //This function should be called to update meta information
                     if(bUpdateMeta == true) {
-                        commitMeta(obj);
+                        commitMeta(meta);
                     }
                 }
             }
-        } finally {
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        finally {
             lock.writeLock().unlock();
+            //System.out.format("Unlock writeLock\n");
         }
 
-        return obj;
+        return meta;
     }
 
     //Close all server and stop working.

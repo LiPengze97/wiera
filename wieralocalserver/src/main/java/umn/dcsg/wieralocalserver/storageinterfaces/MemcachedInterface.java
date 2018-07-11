@@ -60,6 +60,16 @@ public class MemcachedInterface extends StorageInterface {
         return value;
     }
 
+    @Override
+    public boolean rename(String oldKey, String newKey) {
+        return false;
+    }
+
+    @Override
+    public boolean copy(String oldKey, String newKey) {
+        return false;
+    }
+
     public boolean delete(String key) {
         Boolean result = false;
         Future<Boolean> fut = mcClient.delete(key);
@@ -75,7 +85,7 @@ public class MemcachedInterface extends StorageInterface {
     }
 
     @Override
-    protected boolean growTier(int byPercent) {
+    public boolean growTier(int byPercent) {
         String AddServer = findServerToAdd(byPercent);
         StringBuilder newServersAdded = new StringBuilder(serversAdded);
         newServersAdded.append(" ").append(AddServer);
@@ -98,7 +108,7 @@ public class MemcachedInterface extends StorageInterface {
     }
 
     @Override
-    protected boolean shrinkTier(int byPercent) {
+    public boolean shrinkTier(int byPercent) {
         String RemoveServer = findServerToRemove(byPercent);
         int sIdx = serversAdded.indexOf(RemoveServer);
         int eIdx = sIdx + RemoveServer.length();

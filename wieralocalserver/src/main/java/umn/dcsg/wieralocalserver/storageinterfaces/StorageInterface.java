@@ -1,5 +1,6 @@
 package umn.dcsg.wieralocalserver.storageinterfaces;
 
+import java.io.IOException;
 import java.util.Vector;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -16,6 +17,8 @@ public abstract class StorageInterface {
     private AtomicInteger putCount = null;
     private AtomicInteger getCount = null;
 
+    //OKS -> This lock is only for change storage interface only.
+    //So accessing data itself uses readLock rather than writeLock
     private ReentrantReadWriteLock lck = null;
     private boolean active = false;
 
@@ -29,6 +32,8 @@ public abstract class StorageInterface {
     public boolean doPut(String key, byte[] value) {
         boolean ret = false;
         try {
+            //Accessing data via interface itself uses readLock rather than writeLock
+            //Use readLock to check whether interface spec itself is changing or not
             lck.readLock().lock();
             if (active) {
                 putCount.incrementAndGet();
@@ -102,17 +107,21 @@ public abstract class StorageInterface {
         lck.writeLock().unlock();
     }
 
-    protected abstract boolean put(String key, byte[] value);
+    public abstract boolean put(String key, byte[] value);
 
-    protected abstract byte[] get(String key);
+    public abstract byte[] get(String key);
 
-    protected abstract boolean delete(String key);
+    public abstract boolean rename(String oldKey, String newKey);
 
-    protected abstract boolean growTier(int byPercent);
+    public abstract boolean copy(String oldKey, String newKey);
 
-    protected abstract boolean shrinkTier(int byPercent);
+    public abstract boolean delete(String key);
 
-    protected Vector<String> getKeys() {
+    public abstract boolean growTier(int byPercent);
+
+    public abstract boolean shrinkTier(int byPercent);
+
+    public Vector<String> getKeys() {
         return new Vector<String>();
     }
 }

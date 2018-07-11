@@ -1,16 +1,18 @@
 package umn.dcsg.wieralocalserver.responses;
 
 import umn.dcsg.wieralocalserver.LocalInstance;
-import umn.dcsg.wieralocalserver.LocalServer;
 import umn.dcsg.wieralocalserver.Locale;
 import umn.dcsg.wieralocalserver.MetaObjectInfo;
 import umn.dcsg.wieralocalserver.info.OperationLatency;
+import umn.dcsg.wieralocalserver.responses.peers.ForwardPutResponse;
+import umn.dcsg.wieralocalserver.utils.Utils;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Vector;
 
 import static umn.dcsg.wieralocalserver.Constants.*;
+import static umn.dcsg.wieralocalserver.MetaObjectInfo.NEW_VERSION;
 import static umn.dcsg.wieralocalserver.MetaObjectInfo.NO_SUCH_VERSION;
 
 /**
@@ -31,12 +33,12 @@ public class StoreResponse extends Response {
     @Override
     public boolean respond(Map<String, Object> responseParams) {
         boolean bRet = false;
-        String strReason = NOT_HANDLED;
+        String strReason = NOT_HANDLED + " in " + getClass().getSimpleName();
         int nVer = NO_SUCH_VERSION;
         String strTag = "";
         long lLastModifiedTime = 0;
         Locale targetLocale = null;
-        MetaObjectInfo obj;
+        MetaObjectInfo meta;
 
         try {
             String strKey = (String) responseParams.get(KEY);
@@ -47,15 +49,23 @@ public class StoreResponse extends Response {
                 strTag = (String) responseParams.get(TAG);
             }
 
+            if (responseParams.containsKey(VERSION)) {
+                nVer = Utils.convertToInteger(responseParams.get(VERSION));
+            }
+
             if (targetLocale.isLocalLocale() == true) {
                 //Put locally
-                obj = m_localInstance.put(strKey, value, targetLocale.getTierName(), strTag, false);
+                if (nVer >= NEW_VERSION) {
+                    meta = m_localInstance.put(strKey, nVer, value, targetLocale.getTierName(), strTag, false);
+                } else {
+                    meta = m_localInstance.put(strKey, value, targetLocale.getTierName(), strTag, false);
+                }
 
-                if (obj != null) {
+                if (meta != null) {
                     strReason = OK;
                     bRet = true;
-                    nVer = obj.getLastestVersion();
-                    lLastModifiedTime = obj.getLastModifiedTime();
+                    nVer = meta.getLastestVersion();
+                    lLastModifiedTime = meta.getLastModifiedTime();
 
                     //If operation latency is set then change tiername to real tier used for runtime tier changed
                     if (responseParams.containsKey(OPERATION_LATENCY) == true) {
@@ -70,7 +80,7 @@ public class StoreResponse extends Response {
                     Vector<Integer> vers = new Vector<>();
                     vers.add(nVer);
 
-                    keys.put(obj, vers);
+                    keys.put(meta, vers);
                     keyList.put((Locale) responseParams.get(TARGET_LOCALE), keys);
 
                     //Fill-out params for the next response if exists
@@ -80,14 +90,14 @@ public class StoreResponse extends Response {
                     responseParams.put(TAG, strTag);
                     responseParams.put(TIER_NAME, targetLocale.getTierName());
 
-                    addObjsToUpdate(obj, responseParams);
+                    addMetaToUpdate(meta, responseParams);
                 } else {
                     strReason = "Failed to put data into Tier: " + targetLocale.getTierName();
                 }
             } else {
                 //forward put operation
                 //Meta data will be updated by broadcasting later with this forward
-                bRet = Response.respondAtRuntimeWithClass(m_localInstance, ForwardGetResponse.class, responseParams);
+                bRet = Response.respondAtRuntimeWithClass(m_localInstance, ForwardPutResponse.class, responseParams);
 
                 if (bRet == false) {
                     strReason = "Failed to forward: " + responseParams.get(REASON);
@@ -107,26 +117,37 @@ public class StoreResponse extends Response {
 
     @Override
     public void doPrepareResponseParams(Map<String, Object> responseParams) {
-        Locale targetLocale;
+        Locale targetLocale = null;
         String strLocaleID;
 
         if (responseParams.containsKey(TO) == true) {
             strLocaleID = (String) responseParams.get(TO);
+            targetLocale = m_localInstance.getLocaleWithID(strLocaleID);
         } else if (m_initParams.containsKey(TO) == true) {
             strLocaleID = (String) m_initParams.get(TO);
-        } else {
-            strLocaleID = Locale.getLocaleID(LocalServer.getHostName(), m_localInstance.m_strDefaultTierName);
+            targetLocale = m_localInstance.getLocaleWithID(strLocaleID);
         }
 
-        targetLocale = m_localInstance.getLocaleWithID(strLocaleID);
+        if (targetLocale == null) {
+            targetLocale = Locale.defaultLocalLocale;
+        } else {
+            //Set default tiername (for update from other peer)
+            //It may not be set if there is no default storage in the policy
+            if (Locale.defaultLocalLocale == null && targetLocale.isLocalLocale() == true) {
+                Locale.defaultLocalLocale = targetLocale;
+            }
+        }
 
-        //Set default tiername (for update from other peer)
-        //It may not be set if there is no default storage in the policy
-        if (m_localInstance.m_strDefaultTierName == null && targetLocale.isLocalLocale() == true) {
-            m_localInstance.m_strDefaultTierName = targetLocale.getTierName();
+        if (targetLocale == null) {
+            System.out.println("[debug] This should not happen. There is not Target Locale specified.");
         }
 
         //Set runtime param
         responseParams.put(TARGET_LOCALE, targetLocale);
+    }
+
+    @Override
+    public boolean doCheckResponseConditions(Map<String, Object> responseParams) {
+        return true;
     }
 }

@@ -9,6 +9,8 @@ import com.google.common.util.concurrent.RateLimiter;
 import umn.dcsg.wieralocalserver.LocalInstance;
 import umn.dcsg.wieralocalserver.Locale;
 import umn.dcsg.wieralocalserver.MetaObjectInfo;
+import umn.dcsg.wieralocalserver.responses.peers.ForwardGetResponse;
+import umn.dcsg.wieralocalserver.responses.peers.ForwardPutResponse;
 
 import static umn.dcsg.wieralocalserver.Constants.*;
 
@@ -43,7 +45,7 @@ public class MoveResponse extends Response {
 		String strVersionedKey;
 		int nVer;
 		Vector verList;
-		String strReason = NOT_HANDLED;
+		String strReason = NOT_HANDLED  + " in " + getClass().getSimpleName();
 
 		for (Locale locale: keyList.keySet()) {
 			System.out.println("[debug] - Locale : " + locale.getLocaleID());
@@ -142,7 +144,7 @@ public class MoveResponse extends Response {
 						break;
 					} else {
 						//Store
-						addObjsToUpdate(obj, responseParams);
+						addMetaToUpdate(obj, responseParams);
 					}
 				}
 			}
@@ -170,5 +172,10 @@ public class MoveResponse extends Response {
 				responseParams.put(RATE, 5.0);
 			}
 		}
+	}
+
+	@Override
+	public boolean doCheckResponseConditions(Map<String, Object> responseParams) {
+		return true;
 	}
 }

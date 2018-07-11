@@ -4,6 +4,7 @@ import com.sleepycat.persist.model.Persistent;
 import java.util.HashMap;
 import java.util.Map;
 
+import static umn.dcsg.wieralocalserver.Constants.*;
 import static umn.dcsg.wieralocalserver.TierInfo.TIER_TYPE.*;
 
 /**
@@ -13,9 +14,9 @@ import static umn.dcsg.wieralocalserver.TierInfo.TIER_TYPE.*;
 @Persistent
 public class MetaVerInfo {
     //For each version
-    long m_lVer = 0;
+    int m_nVer = 0;
     long m_lAccessCnt = 0;
-    long m_lStartTime = 0;
+    long m_lCreatedTime = 0;
     long m_lLastAccessTime = 0;
     long m_lLastModifiedTime = 0;
     long m_lSize = 0;
@@ -24,25 +25,25 @@ public class MetaVerInfo {
 
     //String: HostName:TierName -> Only for hash value for eash searching
     //Locale: all information about Locale
-    Map<String, Locale> m_storedTiers;
+    Map<String, Locale> m_LocaleList;
 
     MetaVerInfo() {
-        this(0, LocalServer.getHostName(), "", TierInfo.TIER_TYPE.UNKNOWN, System.currentTimeMillis(), 0);
+        this(0, System.currentTimeMillis(), 0);
     }
 
     String getLocaleID(String strHostName, String strTierName) {
         return strHostName + ':' + strTierName;
     }
 
-    MetaVerInfo(long ver, String strHostName, String strTierName, TierInfo.TIER_TYPE tierType, long startTime, long size) {
-        m_lVer = ver;
+    MetaVerInfo(int nVer, long lCreatedTime, long lSize) {
+        m_nVer = nVer;
         m_lAccessCnt = 0;
-        m_lStartTime = startTime;
-        m_lLastAccessTime = startTime;
-        m_lLastModifiedTime = startTime;
-        m_lSize = size;
+        m_lCreatedTime = lCreatedTime;
+        m_lLastAccessTime = lCreatedTime;
+        m_lLastModifiedTime = lCreatedTime;
+        m_lSize = lSize;
 
-        m_storedTiers = new HashMap<>();
+        m_LocaleList = new HashMap<>();
     }
 
     void setLastModifedTime(long lastmodifiedTime) {
@@ -64,11 +65,11 @@ public class MetaVerInfo {
     synchronized boolean addLocale(String strHostName, String strTierName, TierInfo.TIER_TYPE tierType) {
         try {
             //Ignore same tiername. Tiername should be unique.
-            if (m_storedTiers.containsKey(getLocaleID(strHostName, strTierName))) {
+            if (m_LocaleList.containsKey(getLocaleID(strHostName, strTierName))) {
                 return false;
             } else {
-                m_storedTiers.put(getLocaleID(strHostName, strTierName), new Locale(strHostName, strTierName, tierType));
-                //System.out.printf("[Debug] I have added %s - total %d tiers now.", strTierName, m_storedTiers.size());
+                m_LocaleList.put(getLocaleID(strHostName, strTierName), new Locale(strHostName, strTierName, tierType));
+                //System.out.printf("[Debug] I have added %s - total %d tiers now.", strTierName, m_LocaleList.size());
                 return true;
             }
         } catch (Exception e) {
@@ -81,8 +82,8 @@ public class MetaVerInfo {
     synchronized boolean removeLocale(String strHostName, String strTierName) {
         String strLocaleID = getLocaleID(strHostName, strTierName);
         try {
-            if (m_storedTiers.containsKey(strLocaleID)) {
-                m_storedTiers.remove(strLocaleID);
+            if (m_LocaleList.containsKey(strLocaleID)) {
+                m_LocaleList.remove(strLocaleID);
                 return true;
             } else {
                 return false;
@@ -99,16 +100,16 @@ public class MetaVerInfo {
         System.out.println("[debug] check if exist : " + strHostName + ":" + strTierName);
         System.out.println("[debug] -------Available Tiers------");
 
-        for (String strTier: m_storedTiers.keySet()){
+        for (String strTier: m_LocaleList.keySet()){
             System.out.println("- " + strTier);
         }
 */
-        return m_storedTiers.containsKey(getLocaleID(strHostName, strTierName));
+        return m_LocaleList.containsKey(getLocaleID(strHostName, strTierName));
     }
 
     public Locale getLocale(String strHostName, String strTierName){
         if(hasLocale(strHostName, strTierName) == true) {
-            return m_storedTiers.get(getLocaleID(strHostName, strTierName));
+            return m_LocaleList.get(getLocaleID(strHostName, strTierName));
         }
 
         return null;
@@ -116,7 +117,7 @@ public class MetaVerInfo {
 
     TierInfo.TIER_TYPE getTierType(String strHostName, String strTierName) {
         if (hasLocale(strHostName, strTierName) == true) {
-            return m_storedTiers.get(getLocaleID(strHostName, strTierName)).getTierType();
+            return m_LocaleList.get(getLocaleID(strHostName, strTierName)).getTierType();
         }
 
         return null;
@@ -127,7 +128,7 @@ public class MetaVerInfo {
         Locale potentialLocale = null;
 
         //Find local (fastest) tier first and remote
-        for (Locale locale : m_storedTiers.values()) {
+        for (Locale locale : m_LocaleList.values()) {
             if (locale.isLocalLocale() == true) {
                 switch (locale.getTierType()) {
                     case MEMORY:
@@ -161,6 +162,25 @@ public class MetaVerInfo {
     }
 
     public Map<String, Locale> getLocaleList() {
-        return m_storedTiers;
+        return m_LocaleList;
+    }
+
+    public int getVersion() {
+        return m_nVer;
+    }
+
+    public Map<String, Object> getMetaInfo() {
+        Map <String, Object> meta = new HashMap<String, Object> ();
+        meta.put(VERSION, m_nVer);
+        meta.put(ACCESS_CNT, m_lAccessCnt);
+        meta.put(CREATED_TIME, m_lCreatedTime);
+        meta.put(LAST_ACCESSED_TIME, m_lLastAccessTime);
+        meta.put(LAST_MODIFIED_TIME, m_lLastModifiedTime);
+        meta.put(SIZE, m_lSize);
+        meta.put(DIRTY, m_bDirty);
+        meta.put(PIN, m_bPin);
+        meta.put(LOCALE_LIST, m_LocaleList);
+
+        return meta;
     }
 }

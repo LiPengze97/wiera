@@ -18,8 +18,12 @@
 package umn.dcsg.wieralocalserver.utils;
 
 import org.apache.commons.math3.stat.descriptive.rank.Percentile;
+import org.json.JSONObject;
 
+import java.io.File;
+import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.nio.file.Files;
 import java.util.*;
 
 /**
@@ -159,7 +163,7 @@ public class Utils {
 				long lFactor;
 
 				//Parse Human readable size to bytes
-				switch(strSizeUnit) {
+				switch (strSizeUnit) {
 					case "B":
 						lFactor = 1;
 						break;
@@ -212,5 +216,28 @@ public class Utils {
 		percentile.setData(list);
 
 		return percentile.evaluate(lPercentile);
+	}
+
+	public static JSONObject loadJSONObject(String strPolicyPath) {
+		File policyFile = new File(strPolicyPath);
+		String strPolicy;
+
+		if (policyFile.exists() == true && policyFile.isDirectory() == false) {
+			byte[] encoded;
+			try {
+				encoded = Files.readAllBytes(policyFile.toPath());
+				strPolicy = new String(encoded);
+
+				//Read policy file.
+				return new JSONObject(strPolicy);
+
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
+		} else {
+			System.out.println("Failed to find policy file \"" + strPolicyPath + "\"");
+		}
+
+		return null;
 	}
 }

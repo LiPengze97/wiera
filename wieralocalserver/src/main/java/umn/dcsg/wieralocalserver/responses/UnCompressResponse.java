@@ -75,4 +75,9 @@ public class UnCompressResponse extends Response {
     public void doPrepareResponseParams(Map<String, Object> responseParams) {
 
     }
+
+    @Override
+    public boolean doCheckResponseConditions(Map<String, Object> responseParams) {
+        return true;
+    }
 }

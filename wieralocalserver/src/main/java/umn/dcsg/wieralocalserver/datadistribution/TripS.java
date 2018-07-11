@@ -672,7 +672,7 @@ public class TripS
 						//Version need to be updated for previously exist metadata
 						if (bRet == true)
 						{
-							dataObj = m_localInstance.updateVersion(strKey, lRemoteVer, value, strTierName, strTag, remoteModifiedTime, true);
+							dataObj = m_localInstance.putKeyWithVer(strKey, lRemoteVer, value, strTierName, strTag, remoteModifiedTime, true);
 
 							if (dataObj == null)
 							{

@@ -10,7 +10,7 @@ public class KeyLocker {
     private ConcurrentHashMap<String, ReentrantReadWriteLock> lockList = null;
 
     public KeyLocker() {
-        lockList = new ConcurrentHashMap<>(20000, 0.75f, 2);
+        lockList = new ConcurrentHashMap<>(50000, 0.75f, 16);
     }
 
     public ReentrantReadWriteLock getLock(String strKey) {

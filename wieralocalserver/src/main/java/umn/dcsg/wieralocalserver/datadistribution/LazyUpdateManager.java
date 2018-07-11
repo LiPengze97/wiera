@@ -2,9 +2,8 @@ package umn.dcsg.wieralocalserver.datadistribution;
 
 import umn.dcsg.wieralocalserver.LocalInstance;
 import umn.dcsg.wieralocalserver.MetaObjectInfo;
-import umn.dcsg.wieralocalserver.Locale;
 import umn.dcsg.wieralocalserver.info.Latency;
-import umn.dcsg.wieralocalserver.responses.BroadcastResponse;
+import umn.dcsg.wieralocalserver.responses.peers.BroadcastResponse;
 import umn.dcsg.wieralocalserver.responses.Response;
 import umn.dcsg.wieralocalserver.info.OperationLatency;
 
@@ -79,6 +78,7 @@ public class LazyUpdateManager {
         while (true) {
             try {
                 responseParams = m_queue.take();
+                System.out.printf("[debug] After take() Current Queue Cnt: %d\n", m_queue.size());
 
                 //Wait a new item or close
                 if (responseParams == null) {
@@ -99,10 +99,10 @@ public class LazyUpdateManager {
                     } else {
                         MetaObjectInfo obj = m_localInstance.getMetadata(strKey);
 
-                        //If metadata is not updated yet.
+                        //If metadata is not updated (commit) yet.
                         if (obj == null) {
-                            if (responseParams.containsKey(OBJS_LIST) == true) {
-                                Map<String, MetaObjectInfo> objsList = (Map) responseParams.get(OBJS_LIST);
+                            if (responseParams.containsKey(META_NOT_COMMITED_LIST) == true) {
+                                Map<String, MetaObjectInfo> objsList = (Map) responseParams.get(META_NOT_COMMITED_LIST);
 
                                 if (objsList.containsKey(strKey) == true) {
                                     obj = objsList.get(strKey);
@@ -136,7 +136,7 @@ public class LazyUpdateManager {
         }
     }
 
-    public boolean putToQueue(List<Locale> targetList, Map<String, Object> params) {//String strKey, int nVer, byte[] value, String strTierName, String strTag, OperationLatency operationLatency) {
+    public boolean putToQueue(Map<String, Object> params) {//String strKey, int nVer, byte[] value, String strTierName, String strTag, OperationLatency operationLatency) {
         try {
             m_queue.put(new HashMap<>(params));
             synchronized (m_moreItem) {

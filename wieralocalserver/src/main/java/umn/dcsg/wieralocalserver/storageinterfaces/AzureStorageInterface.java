@@ -68,6 +68,16 @@ public class AzureStorageInterface extends StorageInterface {
 		return value;
 	}
 
+	@Override
+	public boolean rename(String oldKey, String newKey) {
+		return false;
+	}
+
+	@Override
+	public boolean copy(String oldKey, String newKey) {
+		return false;
+	}
+
 	public boolean delete(String key) {
 		try {
 			CloudBlockBlob blob = m_container.getBlockBlobReference(key);
@@ -83,12 +93,12 @@ public class AzureStorageInterface extends StorageInterface {
 	}
 
 	@Override
-	protected boolean growTier(int byPercent) {
+	public boolean growTier(int byPercent) {
 		return true;
 	}
 
 	@Override
-	protected boolean shrinkTier(int byPercent) {
+	public boolean shrinkTier(int byPercent) {
 		return true;
 	}
 }

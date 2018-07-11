@@ -17,7 +17,7 @@ public class TierInfo {
 		CLOUD_ARCHIVAL(4),
 		WIERA_INSTANCE(5),
 		REMOTE_TIER(99),        //Only used for cluster mode and updated by peer
-		UNKNOWN(999);
+		DEFAULT(999);
 
 		private final int m_tierType;
 
@@ -62,7 +62,7 @@ public class TierInfo {
 		//Default size if not set 134217728 for now
 		m_lAllocatedSize = Utils.getSizeFromHumanReadable(storageInfo.get(TIER_SIZE), 134217728);
 		m_lExpectedLatency = storageInfo.getLong(TIER_EXPECTED_LATENCY);
-        m_bDefault = storageInfo.getBoolean(DEFAULT);
+        m_bDefault = storageInfo.getBoolean(Constants.DEFAULT);
 	}
 
 	public String getTierName() {

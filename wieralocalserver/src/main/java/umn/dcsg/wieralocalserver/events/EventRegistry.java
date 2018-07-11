@@ -79,15 +79,15 @@ public class EventRegistry implements Runnable {
     }
 
     String listEvents() {
-        String eventLst;
+        String eventList;
         ReadLock lock = m_registryBigLock.readLock();
         try {
             lock.lock();
-            eventLst = m_eventRegistry.toString();
+            eventList = m_eventRegistry.toString();
         } finally {
             lock.unlock();
         }
-        return eventLst;
+        return eventList;
     }
 
     public void closeSocket() {

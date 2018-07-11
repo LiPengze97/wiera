@@ -19,7 +19,7 @@ public class Tier {
     int m_nConnCnt;
     int m_nCurConnectionPos;
 
-    ArrayList m_tierInterfaces;
+    ArrayList m_tierConnection;
     ReentrantLock m_lock;
 
     Tier(JSONObject storageInfo, int nMaxConn) {
@@ -28,7 +28,7 @@ public class Tier {
 
         m_nConnCnt = nMaxConn;
         m_nCurConnectionPos = 0;
-        m_tierInterfaces = new ArrayList();
+        m_tierConnection = new ArrayList();
         m_lock = new ReentrantLock();
 
         switch (m_tierInfo.getTierType()) {
@@ -89,12 +89,12 @@ public class Tier {
 
         for (int i = 0; i < m_nConnCnt; i++) {
             redisInterface = new RedisInterface(strServerList);
-            if (!m_tierInterfaces.add(redisInterface)) {
+            if (!m_tierConnection.add(redisInterface)) {
                 bRet = false;
             }
 		/*	strServerList += ":11211";
 			mcInterface = new MemcachedInterface(strServerList);
-			m_tierInterfaces.add(mcInterface);*/
+			m_tierConnection.add(mcInterface);*/
         }
 
         return bRet;
@@ -109,7 +109,7 @@ public class Tier {
 
             //Seems not work
             //localDiskInterface = new LocalDiskInterface(strLocalPath, 4096);
-            return m_tierInterfaces.add(localDiskInterface);
+            return m_tierConnection.add(localDiskInterface);
         }
 
         return true;
@@ -122,14 +122,14 @@ public class Tier {
                 S3Interface s3;
                 for (int i = 0; i < m_nConnCnt; i++) {
                     s3 = new S3Interface(strID1, strID2, strArg1, strArg2);
-                    return m_tierInterfaces.add(s3);
+                    return m_tierConnection.add(s3);
                 }
                 break;
             case AS:        //Azure Storage
                 AzureStorageInterface azureStorage;
                 for (int i = 0; i < m_nConnCnt; i++) {
                     azureStorage = new AzureStorageInterface(strID1, strID2, strArg1);
-                    return m_tierInterfaces.add(azureStorage);
+                    return m_tierConnection.add(azureStorage);
                 }
                 break;
             case GS:        //Google Storage
@@ -142,7 +142,7 @@ public class Tier {
                         return false;
                     }
 
-                    return m_tierInterfaces.add(gcs);
+                    return m_tierConnection.add(gcs);
                 }
                 break;
         }
@@ -155,7 +155,7 @@ public class Tier {
 
     public boolean addWieraTier(String strWieraIP, int nWieraPort, String strWieraID) {
         WieraInstanceTierInterface wieraTierInterface = new WieraInstanceTierInterface(strWieraIP, nWieraPort, strWieraID);
-        return m_tierInterfaces.add(wieraTierInterface);
+        return m_tierConnection.add(wieraTierInterface);
     }
 
     public StorageInterface getInterface() {
@@ -163,7 +163,7 @@ public class Tier {
 
         try {
             m_lock.lock();
-            iface = (StorageInterface) m_tierInterfaces.get(m_nCurConnectionPos);
+            iface = (StorageInterface) m_tierConnection.get(m_nCurConnectionPos);
             m_nCurConnectionPos = (m_nCurConnectionPos + 1) % m_nConnCnt;    //Circular.
         } catch (Exception e) {
             e.printStackTrace();

@@ -77,6 +77,11 @@ public class FetchAdaptivelyResponse extends Response {
         return false;
     }
 
+    @Override
+    public boolean doCheckResponseConditions(Map<String, Object> responseParams) {
+        return true;
+    }
+
     public String findFastestStorage(String strTierName) {
         String strFoundStorageTier = strTierName;
 

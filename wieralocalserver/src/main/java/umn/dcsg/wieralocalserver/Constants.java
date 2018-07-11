@@ -47,7 +47,7 @@ public class Constants {
 
     public static final String KEY = "key";
     public static final String KEY_LIST = "key_list";
-    public static final String OBJS_LIST = "objs_list";
+    public static final String META_NOT_COMMITED_LIST = "meta_not_update_list";
     public static final String VERSION = "version";
     public static final String SIZE = "size";
     public static final String TIER_NAME = "tier_name";
@@ -65,16 +65,23 @@ public class Constants {
     public static final String LOCAL_INSTANCES = "local_instances";
     public static final String STORAGE_TIERS = "storage_tiers";
     public static final String ONLY_META_INFO = "only_meta_info";
+    public static final String SHARE_META_INFO = "share_meta_info";
 
     public static final String LEADER_HOSTNAME = "leader_hostname";
 
+    //Policy text
     public static final String ID = "id";
+    public static final String CONFIGURATIONS = "configurations";
+    public static final String VERSION_SUPPORT = "version_support";
     public static final String DESC = "desc";
     public static final String PRIMARY = "primary";
     public static final String PERIOD = "period";
     public static final String MONITORING = "monitoring";
-    public static final String READ_QUORUM = "read_quorum";
+    public static final String QUORUM = "quorum";
     public static final String WRITE_QUORUM = "write_quorum";
+    public static final String READ_QUORUM = "read_quorum";
+
+    //public static final String WRITE_QUORUM = "write_quorum";
     public static final String IS_WRITE = "is_write";
 
     public static final String STORAGE_PROVIDER = "storage_provider";
@@ -89,7 +96,6 @@ public class Constants {
     public static final String PEER_PORT = "peer_port";
     public static final String INSTANCE_PORT = "instance_port";
     public static final String INSTANCE_CNT = "instance_cnt";
-
 
     public static final String DATA_DISTRIBUTION = "data_distribution";
     public static final String FAULT_TOLERANCE = "fault_tolerance";
@@ -126,7 +132,11 @@ public class Constants {
     public static final String QUERY_TYPE = "query_type";
     public static final String ACCESS_INFO = "access_info";
     public static final String OBJECT_SIZE = "object_size";
+
+    //Adaptively choosing strage
+    public static final String FASTEST = "fastest";
     public static final String CHEAPEST = "cheapest";
+
 
     public static final String NETWORK_PERCENTILE = "network_pct";
     public static final String STORAGE_PERCENTILE = "storage_pct";
@@ -145,6 +155,9 @@ public class Constants {
     public static final String REMOVE = "remove";
     public static final String REMOVE_VERSION = "removeVersion";
 
+    //Support peer Thrifts call
+    public static final String PUT_PEER = "put";
+    public static final String GET_LASTEST_VERSION_PEER = "getLastestVersion";
 
     public static final long GB_TO_BYTE = 1000000000;
     public static final long DATA_SIZE = 8192; //135768
@@ -188,24 +201,39 @@ public class Constants {
     public static final String GROW_RESPONSE = "Grow";
     public static final String SHRINK_RESPONSE = "Shrink";
 
-    //For Wiera
-    public static final String BROADCAST_RESPONSE = "Broadcast";
-    public static final String QUEUE_RESPONSE = "Queue";
-    public static final String LOCK_GLOBAL_READ_RESPONSE = "LockGlobalRead";
-    public static final String LOCK_GLOBAL_WRITE_RESPONSE = "LockGlobalWrite";
-    public static final String UNLOCK_RESPONSE = "UnLock";
-    public static final String FORWARD_RESPONSE = "Forward";
+    public static final String WRAPPER_PACKAGE_PATH = "umn.dcsg.wieralocalserver.wrapper.";
+    public static final String WRAPPER_FOR_CLASS = "WrapperApplicationInterface";
+
+    //to peers
+    public static final String BROADCAST_RESPONSE = "peers.Broadcast";
+    public static final String QUEUE_RESPONSE = "peers.Queue";
+    public static final String FIND_LATEST_VERSION_NUMBER = "peers.FindLatestVersionNumber";
+    public static final String FIND_LOCALES  = "peers.FindLocales";
+    public static final String FORWARD_GET_RESPONSE = "peers.ForwardGet";
+    public static final String FORWARD_PUT_RESPONSE = "peers.ForwardPut";
+
+    //To wieracentral
+    public static final String LOCK_GLOBAL_READ_RESPONSE = "central.LockGlobalRead";
+    public static final String LOCK_GLOBAL_WRITE_RESPONSE = "central.LockGlobalWrite";
+    public static final String UNLOCK_GLOBAL_RESPONSE = "central.UnLockGlobal";
+    public static final String CHANGE_DATA_PLACEMENT = "central.ChangeDataPlacement";
+    public static final String CHANGE_EVENT_RESPONSE = "central.ChangeEventResponse";
+    public static final String CHANGE_PRIMARY_RESPONSE = "central.ChangePrimaryResponse";
+
+
+    public static final String INCREASE_VERSION = "IncreaseVersion";
 
     //Consistency response
     //Data distribution
-    public static final String EVENTUAL_CONSISTENCY = "EventualConsistency";
+    public static final String EVENTUAL_CONSISTENCY = "peers.consistency.EventualConsistency";
+    public static final String PRIMARY_BACKUP_CONSISTENCY = "peers.consistency.PrimaryBackupConsistency";
+    public static final String MULTIPLE_PRIMARIES_CONSISTENCY = "peers.consistency.MultiplePrimariesConsistency";
+    public static final String QUORUM_CONSISTENCY = "peers.consistency.QuorumConsistency";
     public static final String TRIPS = "TripS";
-    public static final String PRIMARY_BACKUP = "PrimaryBackup";
-    public static final String MULTIPLE_PRIMARIES_CONSISTENCY = "MultiplePrimariesConsistency";
-    public static final String QUORUM = "QuorumConsistencyResponse";
 
     //Available Params
     public static final String TO = "to";
+    public static final String SYNC = "sync";
     public static final String UPDATE_TO = "update_to";
     public static final String FROM = "from";
     public static final String ALL = "all";
@@ -226,7 +254,8 @@ public class Constants {
     public static final String TIMER_PERIOD = "period";
     public static final String RATE = "rate";
     public static final String TARGET_LOCALE = "target_locale";
-    public static final String TARGET_LOCALES = "target_locales";
+    public static final String TARGET_LOCALE_LIST = "target_locale_list";
+    public static final String DYNAMIC_LOCALES = "dynamic_locales";
     public static final String LOCALE_LIST = "locale_list";
     public static final String ALL_PEER_HOSTNAMES = "all_peer_hostname";
     public static final String CONFLICT_CHECK = "conflict_check";
@@ -246,4 +275,5 @@ public class Constants {
     public static final String NOT_SUPPORTED_QUERY = "Not supported query";
     public static final String NO_VERSION = "Failed to find key with given version";
     public static final String NO_META = "Failed to find Meta data with given key";
+    public static final String PUT_IN_PROGRESS_FOR_KEY = "Write for the key is in pregress";
 }

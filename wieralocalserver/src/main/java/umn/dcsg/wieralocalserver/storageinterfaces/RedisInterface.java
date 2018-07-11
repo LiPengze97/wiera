@@ -43,7 +43,36 @@ public class RedisInterface extends StorageInterface {
 	}
 
 	@Override
-	protected boolean delete(String key) {
+    public boolean rename(String oldKey, String newKey) {
+        try (Jedis jedis = m_pool.getResource()) {
+            if(jedis.exists(oldKey) == true && jedis.exists(newKey) == false) {
+                jedis.rename(oldKey, newKey);
+                return true;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+
+        }
+
+        return false;
+	}
+
+	@Override
+    public boolean copy(String oldKey, String newKey) {
+        try (Jedis jedis = m_pool.getResource()) {
+            if(jedis.exists(oldKey) == true && jedis.exists(newKey) == false) {
+                jedis.set(newKey, jedis.get(oldKey));
+                return true;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        return false;
+	}
+
+	@Override
+    public boolean delete(String key) {
 		try (Jedis jedis = m_pool.getResource()) {
 			return jedis.del(key) > 0;
 		} catch (Exception e) {
@@ -54,12 +83,12 @@ public class RedisInterface extends StorageInterface {
 	}
 
 	@Override
-	protected boolean growTier(int byPercent) {
+    public boolean growTier(int byPercent) {
 		return true;
 	}
 
 	@Override
-	protected boolean shrinkTier(int byPercent) {
+    public boolean shrinkTier(int byPercent) {
 		return true;
 	}
 }

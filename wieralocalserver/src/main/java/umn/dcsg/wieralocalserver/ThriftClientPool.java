@@ -20,7 +20,7 @@ public class ThriftClientPool {
 	Class m_clientClass;
 	LinkedBlockingQueue<TServiceClient> m_peerClientList;
 
-	ThriftClientPool(String strIP, long lPort, long lPoolCount, Class clientClass) {
+	public ThriftClientPool(String strIP, long lPort, long lPoolCount, Class clientClass) {
 		m_strIP = strIP;
 		m_lPort = lPort;
 		m_clientClass = clientClass;
@@ -53,9 +53,15 @@ public class ThriftClientPool {
 		return m_strIP;
 	}
 
-	TServiceClient getClient() {
+	public TServiceClient getClient() {
 		try {
-			return m_peerClientList.take();
+			TServiceClient client = m_peerClientList.take();
+
+			if(m_peerClientList.size() == 0) {
+				//System.out.printf("[debug] no more client to ip (%s)\n", m_strIP);
+			}
+
+			return client;
 		} catch (InterruptedException e) {
 			e.printStackTrace();
 		}
@@ -63,7 +69,7 @@ public class ThriftClientPool {
 		return null;
 	}
 
-	void releasePeerClient(TServiceClient peerClient) {
+	public void releasePeerClient(TServiceClient peerClient) {
 		try {
 			m_peerClientList.put(peerClient);
 			//System.out.format("[debug] Available clients # %d\n", m_peerClientList.size());
@@ -75,13 +81,13 @@ public class ThriftClientPool {
 
 	TServiceClient createLocalInstancePeerClient() throws IllegalAccessException, InstantiationException, NoSuchMethodException, InvocationTargetException {
 		TTransport transport;
-		transport = new TSocket(m_strIP, (int) m_lPort);
+		transport = new TSocket(m_strIP, (int) m_lPort, 3000000);
 		TProtocol protocol = new TBinaryProtocol(new TFramedTransport(transport));
-		//PeerInstanceIface.LocalInstanceClient client = new PeerInstanceIface.LocalInstanceClient(protocol);
+		//PeerInstanceIface.LocalInstanceCLI client = new PeerInstanceIface.LocalInstanceCLI(protocol);
 		TServiceClient client = (TServiceClient) m_clientClass.getConstructor(TProtocol.class).newInstance(protocol);
 
 		//10 seconds timeout
-		((TSocket) transport).setTimeout(10000);
+		((TSocket) transport).setTimeout(3000000);
 
 		try {
 			transport.open();

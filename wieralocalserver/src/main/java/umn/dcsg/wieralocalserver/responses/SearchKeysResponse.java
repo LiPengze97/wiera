@@ -122,4 +122,9 @@ public class SearchKeysResponse extends Response {
 
         return false;
     }
+
+    @Override
+    public boolean doCheckResponseConditions(Map<String, Object> responseParams) {
+        return true;
+    }
 }

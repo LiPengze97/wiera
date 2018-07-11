@@ -9,9 +9,10 @@ import umn.dcsg.wieralocalserver.thriftinterfaces.LocalInstanceToPeerIface;
 import umn.dcsg.wieralocalserver.utils.Utils;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.Map;
 
 import static umn.dcsg.wieralocalserver.Constants.*;
+import static umn.dcsg.wieralocalserver.MetaObjectInfo.NO_SUCH_VERSION;
 
 /**
  * Created by Kwangsung on 12/28/2015.
@@ -27,7 +28,7 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
 
     @Override
     public String ping() throws TException {
-        String strReason = NOT_HANDLED;
+        String strReason = NOT_HANDLED  + " in " + getClass().getSimpleName();
         Latency latencyForRetrieving = new Latency();
         latencyForRetrieving.start();
 
@@ -37,9 +38,9 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
         try {
             //Need to configure storage information to sent with return
             //Now return storage info and average_dcs_latency from each instance for leader election
-            HashMap<String, HashMap<String, Double>> storageInfo = m_localInstance.m_localInfo.getStorageInfo(true);
-            HashMap<String, Double> networkInfo = m_localInstance.m_localInfo.getDCsLatencyInfo();
-            HashMap<String, Long> accessInfo = m_localInstance.m_localInfo.getLatestLocalAccessInfo();
+            Map<String, Map<String, Double>> storageInfo = m_localInstance.m_localInfo.getStorageInfo(true);
+            Map<String, Double> networkInfo = m_localInstance.m_localInfo.getDCsLatencyInfo();
+            Map<String, Long> accessInfo = m_localInstance.m_localInfo.getLatestLocalAccessInfo();
             latencyForRetrieving.stop();
 
             Gson gson = new Gson();
@@ -61,7 +62,7 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
 
     @Override
     public String forwardPutRequest(String strPutReq){
-        String strReason = NOT_HANDLED;
+        String strReason = NOT_HANDLED  + " in " + getClass().getSimpleName();
         boolean bRet;
         int nVer;
         long lLastModifiedTime;
@@ -80,20 +81,20 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
 
         //Handling when peer instance does not know about the tiername in this instance.
         //Find and use the fastest storage tier in this instance
-        if (m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(value)) == true) {
+        ByteBuffer result = m_localInstance.m_applicationToLocalInstanceInterface.put(strKey, ByteBuffer.wrap(value));
+        JSONObject ret = new JSONObject(new String(result.array(), result.position(), result.remaining()));
+        bRet = ret.getBoolean(RESULT);
+
+        if (bRet == true) {
             m_localInstance.m_localInfo.incrementalForwardedRequestCnt(strFrom, PUT);
 
             MetaObjectInfo meta = m_localInstance.getMetadata(strKey);
             nVer = meta.getLastestVersion();
             lLastModifiedTime = meta.getLastModifiedTime();
-
             strReason = OK;
-            bRet = true;
         } else {
             strReason = "Failed to putObject the key-value forwarded into Primary Instance";
-            bRet = false;
-
-            nVer = MetaObjectInfo.NO_SUCH_VERSION;
+            nVer = NO_SUCH_VERSION;
             lLastModifiedTime = 0;
         }
 
@@ -118,7 +119,7 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
             int nVer = MetaObjectInfo.LATEST_VERSION;
             String strKey = (String) obj.get(KEY);
             String strFrom = (String) obj.get(FROM);
-            String strTierName = m_localInstance.m_strDefaultTierName;
+            String strTierName = Locale.defaultLocalLocale.getTierName();
 
             //check if version is specified
             if (obj.has(VERSION) == true) {
@@ -168,10 +169,12 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
     }
 
     @Override
-    public String getLatestVersion(String strKey) throws TException {
-        String strReason = NOT_HANDLED;
+    public String getLatestVersion(String strReq) throws TException {
+        String strReason = NOT_HANDLED  + " in " + getClass().getSimpleName();
         boolean bRet = false;
         JSONObject response = new JSONObject();
+        JSONObject obj = new JSONObject(strReq);
+        String strKey = (String) obj.get(KEY);
 
         int nVer = m_localInstance.getLatestVersion(strKey);
 
@@ -193,80 +196,93 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
 
     @Override //This function is only used for update broadcasting
     public String put(String strReq) {
-        JSONObject req = new JSONObject(strReq);
-        String strReason = NOT_HANDLED;
-        boolean bRet;
+        String strReason = NOT_HANDLED  + " in " + getClass().getSimpleName();
+        boolean bRet = false;
+        int nVer = NO_SUCH_VERSION;
 
-        String strKey = (String) req.get(KEY);
-        byte[] value = Base64.decodeBase64((String) req.get(VALUE));
-        String strTag = (String) req.get(TAG);
-        MetaObjectInfo meta = m_localInstance.getMetadata(strKey);
+        try{
+            JSONObject req = new JSONObject(strReq);
 
-        String strTierName;
-        if(req.has(TIER_NAME) == true && m_localInstance.isLocalStorageTier(req.getString(TIER_NAME)) == true) {
-            strTierName = (String) req.get(TIER_NAME);
-        } else {
-            strTierName = m_localInstance.m_strDefaultTierName;
-        }
+            String strKey = (String) req.get(KEY);
+            byte[] value = Base64.decodeBase64((String) req.get(VALUE));
+            String strTag = "";
 
-        //System.out.println("[debug] I will write to :" + strTierName);
-
-        boolean bConflictCheck = false;
-        if(req.has(CONFLICT_CHECK) == true) {
-            bConflictCheck = (boolean) req.get(CONFLICT_CHECK);
-        }
-
-        //Just Write to local without checking version conflict
-        if (bConflictCheck == false || meta == null) {
-            //Create new version
-            if (m_localInstance.put(strKey, value, strTierName, strTag, true) != null) {
-                //System.out.println("new key inserted.");
-                strReason = OK;
-                bRet = true;
-            } else {
-                strReason = "Failed to create a new key: " + strKey;
-                bRet = false;
+            if(req.has(TAG) == true) {
+                strTag = (String) req.get(TAG);
             }
-        } else {
-            int nRemoteVer = (int) req.get(VERSION);
-            int nLocalVer = meta.getLastestVersion();
-            long remoteModifiedTime = Utils.convertToLong(req.get(LAST_MODIFIED_TIME));
 
-            //Conflict same version.
-            if (nLocalVer == nRemoteVer) {
-                long localModifiedTime = meta.getLastModifiedTime();
+            String strTierName;
+            if(req.has(TIER_NAME) == true && m_localInstance.isLocalStorageTier(req.getString(TIER_NAME)) == true) {
+                strTierName = (String) req.get(TIER_NAME);
+            } else {
+                strTierName = Locale.defaultLocalLocale.getTierName();
+            }
 
-                //Now simply check the time.
-                if (remoteModifiedTime > localModifiedTime) {
+            if(req.has(VERSION) == true) {
+                nVer = req.getInt(VERSION);
+            }
+
+            boolean bConflictCheck = false;
+            if(req.has(CONFLICT_CHECK) == true) {
+                bConflictCheck = (boolean) req.get(CONFLICT_CHECK);
+            }
+
+            MetaObjectInfo meta = m_localInstance.getMetadata(strKey);
+            //Just Write to local without checking version conflict
+            if (meta == null) {
+                //Create new version
+                if (m_localInstance.put(strKey, nVer, value, strTierName, strTag, true) != null) {
+                    //System.out.println("new key inserted.");
+                    strReason = OK;
                     bRet = true;
-                    strReason = "There was a conflicts (same version is available) but updated based on modified time";
                 } else {
+                    strReason = "Failed to create a new key: " + strKey;
                     bRet = false;
-                    strReason = "There was a conflicts (same version is available). Update was not done";
                 }
-            } else if (nLocalVer > nRemoteVer) {
-                bRet = false;
-                strReason = "Newer version is available on the instance";
             } else {
+                int nRemoteVer = (int) req.get(VERSION);
+                int nLocalVer = meta.getLastestVersion();
+                long remoteModifiedTime = Utils.convertToLong(req.get(LAST_MODIFIED_TIME));
                 bRet = true;
-                strReason = OK;
-            }
 
-            if (bRet == true) {
-                meta = m_localInstance.updateVersion(strKey, nRemoteVer, value, strTierName, strTag, remoteModifiedTime, true);
+                if(bConflictCheck == true) {
+                    //Conflict same version.
+                    if (nLocalVer == nRemoteVer) {
+                        long localModifiedTime = meta.getLastModifiedTime();
 
-                if (meta == null) {
-                    strReason += "- Failed to update the value";
-                } else    //Local copy successfully updated
-                {
-                    //Change to original to avoid anything bad
-                    meta.setLastModifiedTime(remoteModifiedTime);
+                        //Now simply check the time.
+                        if (remoteModifiedTime > localModifiedTime) {
+                            strReason = "There was a conflicts (same version is available) but updated based on modified time";
+                        } else {
+                            bRet = false;
+                            strReason = "There was a conflicts (same version is available). Update was not done";
+                        }
+                    } else if (nLocalVer > nRemoteVer) {
+                        bRet = false;
+                        strReason = "Newer version is available on the instance";
+                    } else {
+                        strReason = OK;
+                    }
+                }
+
+                if (bRet == true) {
+                    meta = m_localInstance.putKeyWithVer(strKey, nRemoteVer, value, strTierName, strTag, remoteModifiedTime, true, false);
+
+                    if (meta == null) {
+                        strReason += "- Failed to update the value";
+                    } else    //Local copy successfully updated
+                    {
+                        //Change to original to avoid anything bad
+                        meta.setLastModifiedTime(remoteModifiedTime);
+                    }
                 }
             }
-        }
 
-        if (bRet == false) {
-            System.out.println("[debug] Failed In putfrompeerinstance: reason: " + strReason);
+            if (bRet == false) {
+                System.out.println("[debug] Failed In putfrompeerinstance: reason: " + strReason);
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
         }
 
         //Result
@@ -336,7 +352,7 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
         boolean bWrite = (boolean) lockReq.get(IS_WRITE);
 
         JSONObject response = new JSONObject();
-        String strResponse = NOT_HANDLED;
+        String strResponse = NOT_HANDLED  + " in " + getClass().getSimpleName();
 		/*DataDistributionUtil dataDistribution = m_localInstance.m_peerInstanceManager.getDataDistribution();
 
 
@@ -388,7 +404,7 @@ public class LocalInstanceToPeerInterface implements LocalInstanceToPeerIface.If
     @Override
     public String setLeader(String strLeaderHostNameReq) throws org.apache.thrift.TException {
         JSONObject response = new JSONObject();
-        String strResponse = NOT_HANDLED;
+        String strResponse = NOT_HANDLED  + " in " + getClass().getSimpleName();
         boolean bRet = false;
 
         try {

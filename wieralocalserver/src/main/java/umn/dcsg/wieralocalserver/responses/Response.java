@@ -23,7 +23,7 @@ import static umn.dcsg.wieralocalserver.Constants.*;
 public abstract class Response {
     protected LocalInstance m_localInstance = null;
     protected Map<String, Object> m_initParams;
-    protected String m_strRelatedEventType;    //Which event invoke this response
+    protected String m_strEventName;    //Which event invoke this response
 
     //Need to be set by developers (you) when they (you) want to create a new response
     protected List<String> m_lstRequiredParams;
@@ -39,7 +39,7 @@ public abstract class Response {
      */
     public Response(LocalInstance localInstance, String strEventName, Map<String, Object> params) {
         m_localInstance = localInstance;
-        m_strRelatedEventType = strEventName;
+        m_strEventName = strEventName;
         m_initParams = params;
         m_lstRequiredParams = new LinkedList<>();
         InitRequiredParams();
@@ -53,15 +53,30 @@ public abstract class Response {
     public abstract void doPrepareResponseParams(Map<String, Object> responseParams);
 
     //This will check static paramters
-    public boolean doCheckResponseParams(Set<String> keySet) {
+    public boolean doCheckResponse(Map<String, Object> responseParams) {
+        Set<String> keySet = responseParams.keySet();
+        String strMissing = new String();
+        boolean bCheck = true;
+
         for (String strKey : m_lstRequiredParams) {
             if (keySet.contains(strKey) == false) {
-                return false;
+                strMissing += strKey;
+                strMissing += " ";
+                bCheck = false;
             }
         }
 
-        return true;
+        if(bCheck == false) {
+            String strReason = String.format("Response: %s cannot response for the event: %s - missing params: %s\n", getClass().getSimpleName(), getClass().getSimpleName(), strMissing);
+            responseParams.put(REASON, strReason);
+            return false;
+        }
+
+        return doCheckResponseConditions(responseParams);
     }
+
+    //This function will check the response is met the condition to response
+    public abstract boolean doCheckResponseConditions(Map<String, Object> responseParams);
 
     //The responseparams will contain RESULT (boolean) and
     //VALUE if response success
@@ -93,17 +108,27 @@ public abstract class Response {
         return null;
     }
 
-    public static void addObjsToUpdate(MetaObjectInfo obj, Map<String, Object> responseParams) {
-        Map<String, MetaObjectInfo> objsList;
-        if (responseParams.containsKey(OBJS_LIST) == false) {
-            objsList = new HashMap<>();
-            responseParams.put(OBJS_LIST, objsList);
+    public static void addMetaToUpdate(MetaObjectInfo meta, Map<String, Object> responseParams) {
+        Map<String, MetaObjectInfo> metaList;
+        if (responseParams.containsKey(META_NOT_COMMITED_LIST) == false) {
+            metaList = new HashMap<>();
+            responseParams.put(META_NOT_COMMITED_LIST, metaList);
         } else {
-            objsList = (Map)responseParams.get(OBJS_LIST);
+            metaList = (Map)responseParams.get(META_NOT_COMMITED_LIST);
         }
 
-        if(objsList.containsKey(obj.getKey()) == false) {
-            objsList.put(obj.getKey(), obj);
+        if(metaList.containsKey(meta.getKey()) == false) {
+            metaList.put(meta.getKey(), meta);
+        }
+    }
+
+    public static boolean checkMetaInResponse(String strKey, Map<String, Object> responseParams) {
+        Map<String, MetaObjectInfo> metaList;
+        if (responseParams.containsKey(META_NOT_COMMITED_LIST) == false) {
+            return false;
+        } else {
+            metaList = (Map)responseParams.get(META_NOT_COMMITED_LIST);
+            return metaList.containsKey(strKey);
         }
     }
 
@@ -149,7 +174,6 @@ public abstract class Response {
         List responseList = new LinkedList<Response>();
 
         for (Class responseClass : responseClassList) {
-
             try {
                 responseConstructor = responseClass.getConstructor(LocalInstance.class, String.class, Map.class);
                 response = (Response) responseConstructor.newInstance(localInstance, responseClass.getName(), responseParams);
@@ -171,11 +195,13 @@ public abstract class Response {
     //final sequentially function to be called.
     public static boolean respondSequentiallyWithInstance(LocalInstance localInstance, List<Response> responseList, Map<String, Object> responseParams) {
         for (Response response : responseList) {
-            if (respondAtRuntimeWithInstance(localInstance, response, responseParams) == false) {
+            response.doPrepareResponseParams(responseParams);
+
+            if (response.doCheckResponse(responseParams) == false ||
+                respondAtRuntimeWithInstance(localInstance, response, responseParams) == false) {
+                //If response is not ready do be executed, or fails
                 return false;
             }
-
-            //System.out.println("[debug]" + responseClass.getSimpleName() + " is handled.");
         }
 
         return true;

@@ -125,22 +125,24 @@ public abstract class Event implements Serializable {
             m_eventLock.readLock().lock();
 
             //Set latency timer
-            OperationLatency operationLatency = null;
-
+//            OperationLatency operationLatency = null;
             //Timing for only Get and Put operations
+/*
             if(responseParams.containsKey(OPERATION_LATENCY) == true) {
                 operationLatency = (OperationLatency) responseParams.get(OPERATION_LATENCY);
             }
+*/
 
-            Latency latency = null;
-            boolean bRet;
+            if(Response.respondSequentiallyWithInstance(m_localInstance, m_lstResponse, responseParams) == false) {
+                System.out.println(responseParams.get(REASON));
+            }
 
-            for (Response response : m_lstResponse) {
+            /*            for (Response response : m_lstResponse) {
                 //Check reponse can support the event
                 //Each reponse will have a change to make params here
                 response.doPrepareResponseParams(responseParams);
 
-                if (response.doCheckResponseParams(responseParams.keySet()) == true) {
+                if (response.doCheckResponse(responseParams) == true) {
                     //Set timer for each response with its name for action event
                     if(operationLatency != null) {
                         latency = operationLatency.addTimer(response.getClass().getSimpleName());
@@ -160,17 +162,16 @@ public abstract class Event implements Serializable {
                         break;
                     }
                 } else {
-                    String strReason = String.format("Response: %s cannot response for the event: %s because of lack of params\n", response.getClass().getSimpleName(), getClass().getSimpleName());
                     responseParams.put(RESULT, false);
-                    responseParams.put(REASON, strReason);
+                    String strReason = (String)responseParams.get(REASON);
                     System.out.printf(strReason);
                 }
-            }
+            }*/
 
             //Reaching here mean there was no false return
             //Save metadata - if there is object meta updates, store them
-            if(responseParams.containsKey(OBJS_LIST) == true) {
-                Map<String, MetaObjectInfo> objsList = (Map) responseParams.get(OBJS_LIST);
+            if(responseParams.containsKey(META_NOT_COMMITED_LIST) == true) {
+                Map<String, MetaObjectInfo> objsList = (Map) responseParams.get(META_NOT_COMMITED_LIST);
 
                 for (MetaObjectInfo obj : objsList.values()) {
                     m_localInstance.commitMeta(obj);

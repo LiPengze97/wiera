@@ -6,7 +6,7 @@
   <groupId>umn.dcsg.wieralocalserver</groupId>
   <artifactId>wieralocalserver</artifactId>
   <packaging>jar</packaging>
-  <version>0.0.1</version>
+  <version>0.1</version>
   <name>wieralocalserver</name>
   <url>http://dcsg.cs.umn.edu/Projects/Wiera/</url>
   <description>Wiera Local Server Componenet</description>
@@ -292,17 +292,13 @@
     <dependency>
       <groupId>org.json</groupId>
       <artifactId>json</artifactId>
-      <version>1.0</version>
-      <scope>system</scope>
-      <systemPath>${project.basedir}/jars/json.jar</systemPath>
+      <version>20171018</version>
     </dependency>
     <!-- https://mvnrepository.com/artifact/org.apache.thrift/libthrift -->
     <dependency>
       <groupId>org.apache.thrift</groupId>
       <artifactId>libthrift</artifactId>
       <version>0.10.0</version>
-      <scope>system</scope>
-      <systemPath>${project.basedir}/jars/libthrift-0.10.0.jar</systemPath>
     </dependency>
     <!-- https://mvnrepository.com/artifact/log4j/log4j -->
     <dependency>

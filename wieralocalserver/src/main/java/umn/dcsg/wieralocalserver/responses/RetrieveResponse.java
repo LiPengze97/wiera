@@ -1,6 +1,8 @@
 package umn.dcsg.wieralocalserver.responses;
 
+import com.sleepycat.persist.impl.Store;
 import umn.dcsg.wieralocalserver.*;
+import umn.dcsg.wieralocalserver.responses.peers.ForwardGetResponse;
 
 import static umn.dcsg.wieralocalserver.Constants.*;
 
@@ -9,6 +11,20 @@ import java.util.Map;
 /**
  * Created by ajay on 11/13/12.
  */
+/**
+ * Nan:
+ *  For now, only support retrieve from local instance, no remote instance is considered.
+ *  If no "from" is provided, the default target_locale is local instance's default tier. [The tier set as default in policy].
+ *  If no version is provide, return the latest version
+ *  initParam
+ *  in-params:Key[:From:Version]
+ *
+ *  out-param:Key:Version:Value:Target_Locale:[:From]
+ *
+ *
+ */
+
+
 public class RetrieveResponse extends Response {
     public RetrieveResponse(LocalInstance instance, String strEventName, Map<String, Object> params) {
         super(instance, strEventName, params);
@@ -33,20 +49,30 @@ public class RetrieveResponse extends Response {
             value = m_localInstance.get(strKey, targetLocale.getTierName());
         } else {
             //Forward request
-            value = null;
+            if(respondAtRuntimeWithClass(m_localInstance, ForwardGetResponse.class, responseParams) == false) {
+                //If failed to write locally return false.
+                value = null;
+            } else {
+                value = (byte[]) responseParams.get(VALUE);
+            }
         }
 
         //Result
         if (value == null) {
             bRet = false;
+            responseParams.put(REASON, "Failed to retrieve Key:" + strKey);
         } else {
             bRet = true;
-            responseParams.put(VALUE, value);
-
             //To update end of response chain
-            addObjsToUpdate(m_localInstance.getMetadata(strKey), responseParams);
+            responseParams.put(SIZE, value.length);
+
+            //Store local access
+            if (targetLocale.isLocalLocale()) {
+                addMetaToUpdate(m_localInstance.getMetadata(strKey), responseParams);
+            }
         }
 
+        responseParams.put(VALUE, value);
         responseParams.put(RESULT, bRet);
         return bRet;
     }
@@ -59,39 +85,46 @@ public class RetrieveResponse extends Response {
         String strTierName = null;
         TierInfo.TIER_TYPE tierType;
 
-        if (responseParams.containsKey(FROM) == true) {
-            strLocaleID = (String) responseParams.get(FROM);
-        } else if (m_initParams.containsKey(FROM) == true) {
-            strLocaleID = (String) m_initParams.get(FROM);
-        }
-
-        if(strLocaleID != null) {
-            strHostName = strLocaleID.split(":")[0];
-            strTierName = strLocaleID.split(":")[1];
-        }
-
-        //Set default to local hostname
-        if (strHostName == null || strHostName.isEmpty() == true) {
-            strHostName = LocalServer.getHostName();
-        }
-
-        //Set default to local tiername
-        if (strTierName == null) {
-            //If local, set to default
-            if (strHostName.equals(LocalServer.getHostName())) {
-                strTierName = m_localInstance.m_strDefaultTierName;
-            } else {
-                strTierName = "";
+        if(responseParams.containsKey(TARGET_LOCALE) == false) {
+            if (responseParams.containsKey(FROM) == true) {
+                strLocaleID = (String) responseParams.get(FROM);
+            } else if (m_initParams.containsKey(FROM) == true) {
+                strLocaleID = (String) m_initParams.get(FROM);
             }
-        }
 
-        if (strHostName.equals(LocalServer.getHostName()) == true) {
-            tierType = m_localInstance.getLocalStorageTierType(strTierName);
-        } else {
-            tierType = TierInfo.TIER_TYPE.REMOTE_TIER;
-        }
+            if (strLocaleID != null) {
+                strHostName = strLocaleID.split(":")[0];
+                strTierName = strLocaleID.split(":")[1];
+            }
 
-        targetLocale = new Locale(strHostName, strTierName, tierType);
-        responseParams.put(TARGET_LOCALE, targetLocale);
+            //Set default to local hostname
+            if (strHostName == null || strHostName.isEmpty() == true) {
+                strHostName = LocalServer.getHostName();
+            }
+
+            //Set default to local tiername
+            if (strTierName == null) {
+                //If local, set to default
+                if (strHostName.equals(LocalServer.getHostName())) {
+                    strTierName = Locale.defaultLocalLocale.getTierName();
+                } else {
+                    strTierName = "";
+                }
+            }
+
+            if (strHostName.equals(LocalServer.getHostName()) == true) {
+                tierType = m_localInstance.getLocalStorageTierType(strTierName);
+            } else {
+                tierType = TierInfo.TIER_TYPE.REMOTE_TIER;
+            }
+
+            targetLocale = new Locale(strHostName, strTierName, tierType);
+            responseParams.put(TARGET_LOCALE, targetLocale);
+        }
+    }
+
+    @Override
+    public boolean doCheckResponseConditions(Map<String, Object> responseParams) {
+        return true;
     }
 }

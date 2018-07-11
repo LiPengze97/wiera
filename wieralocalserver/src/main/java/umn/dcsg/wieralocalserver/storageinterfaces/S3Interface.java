@@ -70,18 +70,28 @@ public class S3Interface extends StorageInterface {
         return value;
     }
 
+    @Override
+    public boolean rename(String oldKey, String newKey) {
+        return false;
+    }
+
+    @Override
+    public boolean copy(String oldKey, String newKey) {
+        return false;
+    }
+
     public boolean delete(String key) {
         s3Client.deleteObject(s3BucketName, key);
         return true;
     }
 
     @Override
-    protected boolean growTier(int byPercent) {
+    public boolean growTier(int byPercent) {
         return true;
     }
 
     @Override
-    protected boolean shrinkTier(int byPercent) {
+    public boolean shrinkTier(int byPercent) {
         return true;
     }
 }

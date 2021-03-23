@@ -1,0 +1,44 @@
+{
+  "id": "store_and_retrieve",
+  "host_list":{
+  "node0.wanagent.cascade-pg0.utah.cloudlab.us": {
+    "storage_tiers": [
+      {
+        "tier_name": "local_disk",
+        "tier_size": "5GB",
+        "tier_type": 0,
+        "tier_location": "wiera_storage_dir",
+        "tier_expected_latency": 10,
+        "default": true
+      }
+    ],
+    "events": [
+      {
+        "event_type": "ActionPut",
+        "event_trigger": [
+          "ActionPut"
+        ],
+        "event_conditions": {},
+        "responses": [
+          {
+            "response_type": "Store",
+            "response_parameters": {"to":":local_disk"}
+          }
+        ]
+      },
+      {
+        "event_type": "ActionGet",
+        "event_trigger": [
+          "ActionGet"
+        ],
+        "event_conditions": {},
+        "responses": [
+          {
+            "response_type": "Retrieve",
+            "response_parameters": {"from":":local_disk"}
+          }
+        ]
+      }
+    ]
+  }
+}}

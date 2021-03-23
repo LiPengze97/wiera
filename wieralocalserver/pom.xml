@@ -41,7 +41,7 @@
     <repository>
       <id>Typesafe</id>
       <name>Typesafe Maven Repository</name>
-      <url>http://repo.typesafe.com/typesafe/maven-releases/</url>
+      <url>https://repo.typesafe.com/typesafe/maven-releases/</url>
     </repository>
     <repository>
       <id>oracleReleases</id>

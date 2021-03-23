@@ -1,0 +1,22 @@
+210322 09:01:23:912 INFO [./store_and_retrieve.db]Chose lowest utilized file for cleaning. totalUtilization: 46 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210322 09:01:24:020 INFO [./store_and_retrieve.db]No file selected for cleaning. totalUtilization: 94 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210322 09:02:35:274 INFO [./store_and_retrieve.db]Chose lowest utilized file for cleaning. totalUtilization: 46 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210322 09:02:35:371 INFO [./store_and_retrieve.db]No file selected for cleaning. totalUtilization: 93 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210322 09:04:45:441 INFO [./store_and_retrieve.db]Chose lowest utilized file for cleaning. totalUtilization: 46 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210322 09:04:45:553 INFO [./store_and_retrieve.db]No file selected for cleaning. totalUtilization: 93 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210322 09:20:29:210 INFO [./store_and_retrieve.db]Chose lowest utilized file for cleaning. totalUtilization: 46 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210322 09:20:29:323 INFO [./store_and_retrieve.db]No file selected for cleaning. totalUtilization: 93 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 00:40:58:177 INFO [./store_and_retrieve.db]Chose lowest utilized file for cleaning. totalUtilization: 46 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 00:40:58:276 INFO [./store_and_retrieve.db]No file selected for cleaning. totalUtilization: 93 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 00:59:31:802 INFO [./store_and_retrieve.db]Chose lowest utilized file for cleaning. totalUtilization: 46 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 00:59:31:903 INFO [./store_and_retrieve.db]No file selected for cleaning. totalUtilization: 93 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 01:01:20:388 INFO [./store_and_retrieve.db]Chose lowest utilized file for cleaning. totalUtilization: 46 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 01:01:20:503 INFO [./store_and_retrieve.db]No file selected for cleaning. totalUtilization: 93 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 02:51:11:591 INFO [./store_and_retrieve.db]Chose lowest utilized file for cleaning. totalUtilization: 46 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 02:51:11:693 INFO [./store_and_retrieve.db]No file selected for cleaning. totalUtilization: 93 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 05:51:44:941 INFO [./store_and_retrieve.db]Chose lowest utilized file for cleaning. totalUtilization: 46 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 05:51:45:039 INFO [./store_and_retrieve.db]No file selected for cleaning. totalUtilization: 93 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 06:06:29:153 INFO [./store_and_retrieve.db]Chose lowest utilized file for cleaning. totalUtilization: 46 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 06:06:29:267 INFO [./store_and_retrieve.db]No file selected for cleaning. totalUtilization: 93 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 06:09:56:413 INFO [./store_and_retrieve.db]Chose lowest utilized file for cleaning. totalUtilization: 46 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false
+210323 06:09:56:514 INFO [./store_and_retrieve.db]No file selected for cleaning. totalUtilization: 93 bestFileUtilization: 101 lnSizeCorrectionFactor: NaN isProbe: false

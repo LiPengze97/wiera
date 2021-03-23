@@ -111,6 +111,7 @@ public class WieraClientCLI {
         if (policyFile.exists() == true && policyFile.isDirectory() == false) {
 //                byte[] encoded = Files.readAllBytes(policyFile.toPath());
             //              strPolicy = new String(encoded);
+            System.out.println("The policy file is \"" + strPolicyPath + "\"");
         } else {
             System.out.println("Failed to find policy file \"" + strPolicyPath + "\"");
             return;

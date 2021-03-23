@@ -62,11 +62,11 @@ def is_valid_ip(ip):
 		return False
 
 def get_public_ip():
-	from urllib2 import urlopen
-	ip = urlopen('http://checkip.amazonaws.com').read()
-	ip = ip.replace('\n', '')
-	return ip
-
+#	from urllib2 import urlopen
+#	ip = urlopen('http://checkip.amazonaws.com').read()
+#	ip = ip.replace('\n', '')
+#	return ip
+	return '127.0.0.1'
 def PrintException():
 	exc_type, exc_obj, tb = sys.exc_info()
 	f = tb.tb_frame

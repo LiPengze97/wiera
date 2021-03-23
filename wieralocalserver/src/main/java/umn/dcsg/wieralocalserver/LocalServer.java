@@ -194,6 +194,7 @@ public class LocalServer {
 	}
 
 	public static String getExternalIP() {
+		m_strExternalIP = "127.0.0.1";
 		if (m_strExternalIP == null) {
 			try {
 				URL url = new URL("http://checkip.amazonaws.com");

@@ -1,6 +1,6 @@
 service ApplicationToWieraIface {
-    string startInstances(1:string policy);
-    string stopInstances(1:string key);
-    string getInstances(1:string key);
+    string startWieraInstance(1:string policy);
+    string stopWieraInstance(1:string id);
+    string getWieraInstance(1:string id);
 	string getLocalServerList();
 }
